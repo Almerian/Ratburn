@@ -143,6 +143,8 @@ class ConfigView(discord.ui.View):
         interaction: discord.Interaction,
         button: discord.ui.Button
     ):
+        print("CONFIG BUTTON CLICKED")
+    
         await interaction.response.edit_message(
             content="**What would you like to configure?**",
             embed=None,
