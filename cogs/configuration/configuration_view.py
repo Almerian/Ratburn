@@ -143,15 +143,22 @@ class ConfigView(discord.ui.View):
         interaction: discord.Interaction,
         button: discord.ui.Button
     ):
-        print("CONFIG BUTTON CLICKED")
+        print("1 - CONFIG BUTTON CLICKED")
+    
+        view = ConfigEditView(
+            self.bot,
+            self.guild_id
+        )
+    
+        print("2 - CONFIG EDIT VIEW CREATED")
     
         await interaction.response.edit_message(
             content="**What would you like to configure?**",
             embed=None,
-            view=ConfigEditView(
-                self.bot,
-                self.guild_id
-            )
+            view=view
+        )
+    
+        print("3 - CONFIG MESSAGE EDITED")
         )
 
 
