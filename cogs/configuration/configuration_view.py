@@ -606,20 +606,22 @@ class StaffRoleSelect(discord.ui.RoleSelect):
             max_values=1
         )
 
-    async def callback(
-        self,
-        interaction: discord.Interaction
-    ):
+    async def callback(self, interaction: discord.Interaction):
+        print("STAFF ROLE SELECT CALLBACK FIRED")
+    
         self.selected_role_id = self.values[0].id
-
+    
+        print(f"SELECTED ROLE ID: {self.selected_role_id}")
+    
         await interaction.response.edit_message(
             content=(
-                f"**Staff role selected:** "
-                f"{self.values[0].mention}\n\n"
+                f"**Staff role selected:** <@&{self.selected_role_id}>\n\n"
                 "Click **Save** to apply this change."
             ),
             view=self.view
         )
+    
+        print("STAFF ROLE MESSAGE EDITED")
 
 
 class DetentionRoleView(discord.ui.View):
