@@ -40,6 +40,7 @@ class Ratburn(commands.Bot):
         await self.load_extension("cogs.general")
         await self.load_extension("cogs.configuration")
         await self.load_extension("cogs.rat_trap")
+        await self.load_extension("cogs.onboarding")
 
         synced = await self.tree.sync()
         logger.info("Synced %s slash command(s).", len(synced))
