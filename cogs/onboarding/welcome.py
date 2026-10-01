@@ -70,7 +70,7 @@ PRONOUN_OPTIONS = {
     "prefer not to say": [
         {"subject": "they", "object": "them"},
     ],
-]
+}
 
 
 def build_onboarding_profile_embed(
