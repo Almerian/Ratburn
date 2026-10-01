@@ -1,1 +1,188 @@
 Never actually made one of these before, gawd help us all.
+
+
+1. 🎓 Onboarding
+  Welcome message
+  Optional birthday collection
+  Reaction/button role selection
+  Maybe server rules / "I have read these" acknowledgment
+  Potentially a little Ratburn introduction
+
+2. 🚨 Discipline
+  Rule-break tracking
+  Infractions
+  Demerits
+  Detention
+  Temporary restrictions
+  Temporary bans
+  Permanent bans
+  Full history/ledger
+  Mod overrides
+  Expiration handling
+  Audit logging
+
+3. 🧹 Chat Filter
+  Add multiple words at once
+  Remove individual words
+  View filter
+  Admin-only modification
+  Mod+ viewing
+  Whole-word/word-boundary matching
+  Logging changes
+  Potentially different actions for different filter entries later
+
+4. 📝 Daily Quiz
+  Daily question
+  Private/ephemeral answers
+  Per-user score
+  Answer tracking
+  Eventually: rewards/shop/whatever the hell Ratburn decides points are good for
+
+5. 🗓️ Events & Birthdays
+  Events
+  Time zones
+  24-hour reminders
+  Start announcements
+  Birthday database
+  Birthday announcements
+  Monthly birthday calendar
+  DST handling
+
+6. 🤖 Ratburn Personality
+  Keyword/question responses
+  Magic tricks
+  Context-specific responses
+  Random GIFs
+  General "Ratburn is a weird little man living in your server" behavior
+
+7. 🛠️ Utility / Other Bots
+  Explain Arthur
+  Explain Buster
+  Explain Paige
+  Possibly /help organized by bot
+
+8. 🔐 Security / Anti-Spam
+  Watch designated "OH GOD THE SPAM BOT IS HERE" channel
+  Automatically ban users who post there
+  Audit everything Ratburn does
+
+
+Handling Punishment
+  Punishment
+    ├── ID
+    ├── User
+    ├── Type
+    ├── Reason
+    ├── Demerits awarded
+    ├── Date issued
+    ├── Issued by
+    ├── Status
+    ├── Start time
+    ├── End time
+    ├── Related detention visit
+    ├── Override reason
+    └── Override timestamp
+  
+  Detention Visit
+    ├── ID
+    ├── User
+    ├── Triggering punishment
+    ├── Start
+    ├── End
+    ├── Reason
+    ├── Status
+    └── Notes
+  
+  /discipline override <punishment> <reason>: Mod+ command that overrides user's punishment (forgive).
+  /discipline pardon: Admin command that reverts punishment when unfairly punished (forget).
+  /discipline active: Mod+ command showing currently active punishments.
+
+Birthdays
+    user_id
+    month
+    day
+    birth_year (nullable)
+    So:
+    No year
+    🎂 Happy Birthday, @User!
+    Year provided
+    Ratburn calculates their age on that birthday, rather than storing a static age.
+    Which means the database never needs updating.
+    And the calendar command could produce:
+    🎂 October Birthdays
+    October 3 — @User1
+    October 14 — @User2
+    October 14 — @User3
+    October 29 — @User4
+    Make the year never appear in the public calendar.
+
+Audit
+  Everything significant should be logged.
+  Not necessarily every normal bot message, but administrative state changes.
+  Something like:
+    Action	Example
+    ROLE_ADD	Ratburn assigned Detention
+    ROLE_REMOVE	Detention expired
+    DEMERIT_ADD	+2 demerits
+    PUNISHMENT_CREATE	New punishment
+    PUNISHMENT_OVERRIDE	Mod overturned punishment
+    BAN	User banned
+    UNBAN	User unbanned
+    FILTER_ADD	5 words added
+    FILTER_REMOVE	Word removed
+    EVENT_CREATE	Event scheduled
+    EVENT_EDIT	Event modified
+    EVENT_CANCEL	Event cancelled
+    BIRTHDAY_UPDATE	User changed birthday
+    CONFIG_CHANGE	Ratburn settings changed
+  
+  And every audit record should have:
+    timestamp
+    actor
+    action
+    target
+    details
+
+Setup
+  Proper setup system.
+  Instead of making the admin manually configure 900 things in a database, eventually:
+    /ratburn setup
+  and Ratburn walks them through it.
+  
+  Something like:
+    Mr. Ratburn's Setup Assistant  
+    Let's get this classroom in order.
+    1/8 — Moderation
+      Please select the role used for moderators.
+      Then:
+        2/8 — Detention
+        Select the Detention role.
+      Then:
+        3/8 — Detention Channel
+        Select the channel.
+      etc.
+
+**Every** table gets a guild_id.
+
+CONTENT v CONFIG
+  Configuration
+    Things like:
+      Detention role
+      Detention channel
+      Moderator role
+      Admin role
+      Protected channel
+      Server timezone
+      Demerit thresholds
+      Punishment durations
+      AFK timeout
+  
+  Content
+    Things like:
+      Filter words
+      Quiz questions
+      Ratburn responses
+      Magic trick GIFs
+      Birthday messages
+      Bot explanations
+  That way /ratburn config and /ratburn content can be cleanly distinct.
