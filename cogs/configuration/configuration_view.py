@@ -548,11 +548,19 @@ class StaffRoleView(discord.ui.View):
     ):
         print("STAFF ROLE SAVE CLICKED")
 
-        select = self.children[0]
-        print(f"FIRST CHILD: {type(select).__name__}")
-
-        if not isinstance(select, StaffRoleSelect):
-            print("ERROR: FIRST CHILD IS NOT STAFF ROLE SELECT")
+        select = next(
+            (
+                child
+                for child in self.children
+                if isinstance(child, StaffRoleSelect)
+            ),
+            None
+        )
+        
+        print(f"STAFF ROLE SELECT FOUND: {select is not None}")
+        
+        if select is None:
+            print("ERROR: STAFF ROLE SELECT NOT FOUND")
             return
 
         print(f"SELECTED ROLE ID: {select.selected_role_id}")
