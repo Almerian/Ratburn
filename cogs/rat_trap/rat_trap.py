@@ -1,6 +1,7 @@
 import discord
 from discord.ext import commands
 
+from .cleanup import cleanup_recent_messages
 
 class RatTrap(commands.Cog):
     def __init__(self, bot):
@@ -54,7 +55,13 @@ class RatTrap(commands.Cog):
                 reason="Rat-Trap violation"
             )
         except discord.HTTPException:
-            pass
+            return
+
+# Clean up the offender's recent messages.
+        await cleanup_recent_messages(
+            message.guild,
+            message.author
+        )
 
 
 async def setup(bot):
