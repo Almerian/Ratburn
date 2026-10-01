@@ -54,8 +54,7 @@ class General(commands.Cog):
 
     async def cog_unload(self):
         self.bot.tree.remove_command(
-            self.ratburn.name,
-            type=self.ratburn.type
+            self.ratburn.name
         )
 
 
