@@ -1,9 +1,9 @@
 import calendar
 import json
+from datetime import datetime, timezone
 
 import discord
 from discord.ext import commands
-
 
 
 TIMEZONE_OPTIONS = [
@@ -33,7 +33,6 @@ TIMEZONE_OPTIONS = [
     ("UTC+11:00", "Solomon Islands, Vanuatu", "Pacific/Guadalcanal"),
     ("UTC+12:00", "Fiji, New Zealand (Standard)", "Pacific/Auckland"),
 ]
-
 
 
 PRONOUN_OPTIONS = {
@@ -71,8 +70,109 @@ PRONOUN_OPTIONS = {
     "prefer not to say": [
         {"subject": "they", "object": "them"},
     ],
-}
+]
 
+
+def build_onboarding_profile_embed(
+    member: discord.Member,
+    profile
+):
+    embed = discord.Embed(
+        title="🐀 All settled in!",
+        description=(
+            f"{member.mention} has finished getting situated "
+            "and is ready to go!"
+        )
+    )
+
+    # Birthday
+    if profile["birthday_month"] and profile["birthday_day"]:
+        birthday = (
+            f"{calendar.month_name[profile['birthday_month']]} "
+            f"{profile['birthday_day']}"
+        )
+    else:
+        birthday = "Not provided"
+
+    # Nickname
+    nickname = profile["nickname"] or member.display_name
+
+    # Pronouns
+    pronouns = "they/them"
+
+    if profile["pronouns"]:
+        try:
+            pronoun_sets = json.loads(profile["pronouns"])
+
+            if pronoun_sets:
+                pronouns = " • ".join(
+                    f"{item['subject']}/{item['object']}"
+                    for item in pronoun_sets
+                )
+        except (json.JSONDecodeError, TypeError):
+            pronouns = profile["pronouns"]
+
+    # Timezone
+    timezone_name = profile["timezone"] or "Not provided"
+
+    embed.add_field(
+        name="🎂 Birthday",
+        value=birthday,
+        inline=True
+    )
+
+    embed.add_field(
+        name="🏷️ Nickname",
+        value=nickname,
+        inline=True
+    )
+
+    embed.add_field(
+        name="💬 Pronouns",
+        value=pronouns,
+        inline=True
+    )
+
+    embed.add_field(
+        name="🌎 Timezone",
+        value=timezone_name,
+        inline=True
+    )
+
+    embed.add_field(
+        name="📜 Rules",
+        value="✅ Acknowledged",
+        inline=True
+    )
+
+    embed.set_footer(
+        text="Welcome aboard! Please enjoy your stay."
+    )
+
+    return embed
+
+
+async def return_to_profile(
+    interaction: discord.Interaction,
+    bot,
+    member: discord.Member,
+    profile_view
+):
+    profile = bot.database.get_member_profile(
+        member.guild.id,
+        member.id
+    )
+
+    embed = build_onboarding_profile_embed(
+        member,
+        profile
+    )
+
+    await interaction.response.edit_message(
+        content=None,
+        embed=embed,
+        view=profile_view
+    )
 
 
 class WelcomeView(discord.ui.View):
@@ -117,16 +217,25 @@ class WelcomeView(discord.ui.View):
                 "Excellent. Let's get a few things sorted out.\n\n"
                 "First, when is your birthday?"
             ),
-            view=BirthdayView(self.bot, self.member)
+            view=BirthdayView(
+                self.bot,
+                self.member
+            )
         )
 
 
 class BirthdayView(discord.ui.View):
-    def __init__(self, bot, member: discord.Member):
+    def __init__(
+        self,
+        bot,
+        member: discord.Member,
+        profile_view=None
+    ):
         super().__init__(timeout=None)
 
         self.bot = bot
         self.member = member
+        self.profile_view = profile_view
 
         self.selected_month = None
         self.selected_day = None
@@ -156,6 +265,15 @@ class BirthdayView(discord.ui.View):
         self.save_button.callback = self.save_birthday
         self.add_item(self.save_button)
 
+        if self.profile_view is not None:
+            self.back_button = discord.ui.Button(
+                label="Back to Profile",
+                emoji="◀️",
+                style=discord.ButtonStyle.secondary
+            )
+            self.back_button.callback = self.back_to_profile
+            self.add_item(self.back_button)
+
     async def check_user(self, interaction: discord.Interaction):
         if interaction.user.id != self.member.id:
             await interaction.response.send_message(
@@ -165,6 +283,20 @@ class BirthdayView(discord.ui.View):
             return False
 
         return True
+
+    async def back_to_profile(
+        self,
+        interaction: discord.Interaction
+    ):
+        if not await self.check_user(interaction):
+            return
+
+        await return_to_profile(
+            interaction,
+            self.bot,
+            self.member,
+            self.profile_view
+        )
 
     async def year_button_callback(
         self,
@@ -217,7 +349,10 @@ class BirthdayView(discord.ui.View):
         year = self.selected_year
 
         validation_year = year if year is not None else 2000
-        max_day = calendar.monthrange(validation_year, month)[1]
+        max_day = calendar.monthrange(
+            validation_year,
+            month
+        )[1]
 
         if day > max_day:
             await interaction.response.send_message(
@@ -251,6 +386,15 @@ class BirthdayView(discord.ui.View):
             year
         )
 
+        if self.profile_view is not None:
+            await return_to_profile(
+                interaction,
+                self.bot,
+                self.member,
+                self.profile_view
+            )
+            return
+
         self.bot.database.set_member_profile(
             guild_id,
             user_id,
@@ -263,7 +407,10 @@ class BirthdayView(discord.ui.View):
                 "Birthday saved! 🎂\n\n"
                 "Next question: what pronouns should I use for you?"
             ),
-            view=PronounView(self.bot, self.member)
+            view=PronounView(
+                self.bot,
+                self.member
+            )
         )
 
 
@@ -378,11 +525,17 @@ class YearModal(discord.ui.Modal, title="Birthday Year"):
 
 
 class PronounView(discord.ui.View):
-    def __init__(self, bot, member: discord.Member):
+    def __init__(
+        self,
+        bot,
+        member: discord.Member,
+        profile_view=None
+    ):
         super().__init__(timeout=None)
 
         self.bot = bot
         self.member = member
+        self.profile_view = profile_view
         self.selected_pronouns = None
 
         self.add_item(PronounSelect())
@@ -401,6 +554,15 @@ class PronounView(discord.ui.View):
         self.save_button.callback = self.save_pronouns
         self.add_item(self.save_button)
 
+        if self.profile_view is not None:
+            self.back_button = discord.ui.Button(
+                label="Back to Profile",
+                emoji="◀️",
+                style=discord.ButtonStyle.secondary
+            )
+            self.back_button.callback = self.back_to_profile
+            self.add_item(self.back_button)
+
     async def check_user(self, interaction: discord.Interaction):
         if interaction.user.id != self.member.id:
             await interaction.response.send_message(
@@ -410,6 +572,20 @@ class PronounView(discord.ui.View):
             return False
 
         return True
+
+    async def back_to_profile(
+        self,
+        interaction: discord.Interaction
+    ):
+        if not await self.check_user(interaction):
+            return
+
+        await return_to_profile(
+            interaction,
+            self.bot,
+            self.member,
+            self.profile_view
+        )
 
     async def custom_pronoun_callback(
         self,
@@ -448,6 +624,15 @@ class PronounView(discord.ui.View):
             0
         )
 
+        if self.profile_view is not None:
+            await return_to_profile(
+                interaction,
+                self.bot,
+                self.member,
+                self.profile_view
+            )
+            return
+
         self.bot.database.set_member_profile(
             self.member.guild.id,
             self.member.id,
@@ -460,7 +645,10 @@ class PronounView(discord.ui.View):
                 "Pronouns saved!\n\n"
                 "Now, what shall I call you?"
             ),
-            view=NicknameView(self.bot, self.member)
+            view=NicknameView(
+                self.bot,
+                self.member
+            )
         )
 
 
@@ -564,7 +752,10 @@ class CustomPronounModal(
         value = self.pronouns.value.strip().lower()
 
         if "/" in value:
-            parts = [part.strip() for part in value.split("/")]
+            parts = [
+                part.strip()
+                for part in value.split("/")
+            ]
 
             if len(parts) != 2 or not all(parts):
                 await interaction.response.send_message(
@@ -592,11 +783,17 @@ class CustomPronounModal(
 
 
 class NicknameView(discord.ui.View):
-    def __init__(self, bot, member: discord.Member):
+    def __init__(
+        self,
+        bot,
+        member: discord.Member,
+        profile_view=None
+    ):
         super().__init__(timeout=None)
 
         self.bot = bot
         self.member = member
+        self.profile_view = profile_view
 
         self.nickname = None
 
@@ -621,6 +818,15 @@ class NicknameView(discord.ui.View):
         self.save_button.callback = self.save_nickname
         self.add_item(self.save_button)
 
+        if self.profile_view is not None:
+            self.back_button = discord.ui.Button(
+                label="Back to Profile",
+                emoji="◀️",
+                style=discord.ButtonStyle.secondary
+            )
+            self.back_button.callback = self.back_to_profile
+            self.add_item(self.back_button)
+
     async def check_user(self, interaction: discord.Interaction):
         if interaction.user.id != self.member.id:
             await interaction.response.send_message(
@@ -630,6 +836,20 @@ class NicknameView(discord.ui.View):
             return False
 
         return True
+
+    async def back_to_profile(
+        self,
+        interaction: discord.Interaction
+    ):
+        if not await self.check_user(interaction):
+            return
+
+        await return_to_profile(
+            interaction,
+            self.bot,
+            self.member,
+            self.profile_view
+        )
 
     async def nickname_callback(
         self,
@@ -695,6 +915,15 @@ class NicknameView(discord.ui.View):
                 )
                 return
 
+        if self.profile_view is not None:
+            await return_to_profile(
+                interaction,
+                self.bot,
+                self.member,
+                self.profile_view
+            )
+            return
+
         self.bot.database.set_member_profile(
             guild_id,
             user_id,
@@ -707,11 +936,17 @@ class NicknameView(discord.ui.View):
                 "Nickname saved!\n\n"
                 "Now, what timezone should I use for you?"
             ),
-            view=None
+            view=TimezoneView(
+                self.bot,
+                self.member
+            )
         )
 
 
-class NicknameModal(discord.ui.Modal, title="Set Nickname"):
+class NicknameModal(
+    discord.ui.Modal,
+    title="Set Nickname"
+):
     nickname = discord.ui.TextInput(
         label="Nickname",
         placeholder="What should Ratburn call you?",
@@ -751,11 +986,17 @@ class NicknameModal(discord.ui.Modal, title="Set Nickname"):
 
 
 class TimezoneView(discord.ui.View):
-    def __init__(self, bot, member: discord.Member):
+    def __init__(
+        self,
+        bot,
+        member: discord.Member,
+        profile_view=None
+    ):
         super().__init__(timeout=None)
 
         self.bot = bot
         self.member = member
+        self.profile_view = profile_view
         self.selected_timezone = None
 
         self.add_item(TimezoneSelect())
@@ -767,6 +1008,15 @@ class TimezoneView(discord.ui.View):
         self.save_button.callback = self.save_timezone
         self.add_item(self.save_button)
 
+        if self.profile_view is not None:
+            self.back_button = discord.ui.Button(
+                label="Back to Profile",
+                emoji="◀️",
+                style=discord.ButtonStyle.secondary
+            )
+            self.back_button.callback = self.back_to_profile
+            self.add_item(self.back_button)
+
     async def check_user(self, interaction: discord.Interaction):
         if interaction.user.id != self.member.id:
             await interaction.response.send_message(
@@ -776,6 +1026,20 @@ class TimezoneView(discord.ui.View):
             return False
 
         return True
+
+    async def back_to_profile(
+        self,
+        interaction: discord.Interaction
+    ):
+        if not await self.check_user(interaction):
+            return
+
+        await return_to_profile(
+            interaction,
+            self.bot,
+            self.member,
+            self.profile_view
+        )
 
     async def save_timezone(
         self,
@@ -798,11 +1062,25 @@ class TimezoneView(discord.ui.View):
             self.selected_timezone
         )
 
+        if self.profile_view is not None:
+            await return_to_profile(
+                interaction,
+                self.bot,
+                self.member,
+                self.profile_view
+            )
+            return
+
         self.bot.database.set_member_profile(
             self.member.guild.id,
             self.member.id,
             "onboarding_step",
             "rules"
+        )
+
+        rules_view = RulesView(
+            self.bot,
+            self.member
         )
 
         await interaction.response.edit_message(
@@ -811,7 +1089,7 @@ class TimezoneView(discord.ui.View):
                 "Nearly finished. Please read and acknowledge "
                 "the server rules."
             ),
-            view=None
+            view=rules_view
         )
 
 
@@ -846,7 +1124,354 @@ class TimezoneSelect(discord.ui.Select):
         await interaction.response.edit_message(
             view=view
         )
-        
+
+
+class OnboardingCompleteView(discord.ui.View):
+    def __init__(
+        self,
+        bot,
+        member: discord.Member
+    ):
+        super().__init__(timeout=600)
+
+        self.bot = bot
+        self.member = member
+        self.message = None
+
+        self.edit_button = discord.ui.Button(
+            label="Edit Profile",
+            emoji="✏️",
+            style=discord.ButtonStyle.secondary
+        )
+
+        self.edit_button.callback = self.edit_profile
+        self.add_item(self.edit_button)
+
+    async def check_user(
+        self,
+        interaction: discord.Interaction
+    ):
+        if interaction.user.id != self.member.id:
+            await interaction.response.send_message(
+                "This isn't your onboarding!",
+                ephemeral=True
+            )
+            return False
+
+        return True
+
+    async def edit_profile(
+        self,
+        interaction: discord.Interaction
+    ):
+        if not await self.check_user(interaction):
+            return
+
+        view = EditProfileView(
+            self.bot,
+            self.member,
+            self
+        )
+
+        await interaction.response.edit_message(
+            content="**What would you like to change?**",
+            embed=None,
+            view=view
+        )
+
+    async def on_timeout(self):
+        for item in self.children:
+            item.disabled = True
+
+        if self.message:
+            try:
+                await self.message.edit(
+                    view=self
+                )
+            except discord.HTTPException:
+                pass
+
+
+class EditProfileView(discord.ui.View):
+    def __init__(
+        self,
+        bot,
+        member: discord.Member,
+        profile_view: OnboardingCompleteView
+    ):
+        super().__init__(timeout=600)
+
+        self.bot = bot
+        self.member = member
+        self.profile_view = profile_view
+
+        self.add_item(EditProfileSelect())
+
+    async def check_user(
+        self,
+        interaction: discord.Interaction
+    ):
+        if interaction.user.id != self.member.id:
+            await interaction.response.send_message(
+                "This isn't your onboarding!",
+                ephemeral=True
+            )
+            return False
+
+        return True
+
+    @discord.ui.button(
+        label="Done",
+        emoji="✅",
+        style=discord.ButtonStyle.success
+    )
+    async def done(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+        if not await self.check_user(interaction):
+            return
+
+        await return_to_profile(
+            interaction,
+            self.bot,
+            self.member,
+            self.profile_view
+        )
+
+
+class EditProfileSelect(discord.ui.Select):
+    def __init__(self):
+        options = [
+            discord.SelectOption(
+                label="Birthday",
+                emoji="🎂",
+                value="birthday"
+            ),
+            discord.SelectOption(
+                label="Pronouns",
+                emoji="💬",
+                value="pronouns"
+            ),
+            discord.SelectOption(
+                label="Nickname",
+                emoji="🏷️",
+                value="nickname"
+            ),
+            discord.SelectOption(
+                label="Timezone",
+                emoji="🌎",
+                value="timezone"
+            ),
+        ]
+
+        super().__init__(
+            placeholder="Choose something to edit...",
+            options=options
+        )
+
+    async def callback(
+        self,
+        interaction: discord.Interaction
+    ):
+        view = self.view
+
+        if interaction.user.id != view.member.id:
+            await interaction.response.send_message(
+                "This isn't your onboarding!",
+                ephemeral=True
+            )
+            return
+
+        choice = self.values[0]
+
+        if choice == "birthday":
+            await interaction.response.edit_message(
+                content=(
+                    "**Let's update your birthday!**\n\n"
+                    "Choose your month and day below."
+                ),
+                embed=None,
+                view=BirthdayView(
+                    view.bot,
+                    view.member,
+                    view.profile_view
+                )
+            )
+            return
+
+        if choice == "pronouns":
+            await interaction.response.edit_message(
+                content="**Let's update your pronouns!**",
+                embed=None,
+                view=PronounView(
+                    view.bot,
+                    view.member,
+                    view.profile_view
+                )
+            )
+            return
+
+        if choice == "nickname":
+            await interaction.response.edit_message(
+                content="**Let's update your nickname!**",
+                embed=None,
+                view=NicknameView(
+                    view.bot,
+                    view.member,
+                    view.profile_view
+                )
+            )
+            return
+
+        if choice == "timezone":
+            await interaction.response.edit_message(
+                content="**Let's update your timezone!**",
+                embed=None,
+                view=TimezoneView(
+                    view.bot,
+                    view.member,
+                    view.profile_view
+                )
+            )
+
+
+class RulesView(discord.ui.View):
+    def __init__(
+        self,
+        bot,
+        member: discord.Member
+    ):
+        super().__init__(timeout=None)
+
+        self.bot = bot
+        self.member = member
+
+        config = self.bot.database.get_config(
+            member.guild.id
+        )
+
+        rules_channel_id = config["rules_channel_id"]
+        rules_message_id = config["rules_message_id"]
+
+        if rules_channel_id and rules_message_id:
+            rules_url = (
+                f"https://discord.com/channels/"
+                f"{member.guild.id}/"
+                f"{rules_channel_id}/"
+                f"{rules_message_id}"
+            )
+
+            self.add_item(
+                discord.ui.Button(
+                    label="Read the Rules",
+                    emoji="📜",
+                    style=discord.ButtonStyle.link,
+                    url=rules_url
+                )
+            )
+
+        self.acknowledge_button = discord.ui.Button(
+            label="I Acknowledge the Rules",
+            emoji="✅",
+            style=discord.ButtonStyle.success
+        )
+
+        self.acknowledge_button.callback = (
+            self.acknowledge_rules
+        )
+
+        self.add_item(self.acknowledge_button)
+
+    async def check_user(
+        self,
+        interaction: discord.Interaction
+    ):
+        if interaction.user.id != self.member.id:
+            await interaction.response.send_message(
+                "This isn't your onboarding!",
+                ephemeral=True
+            )
+            return False
+
+        return True
+
+    async def acknowledge_rules(
+        self,
+        interaction: discord.Interaction
+    ):
+        if not await self.check_user(interaction):
+            return
+
+        config = self.bot.database.get_config(
+            self.member.guild.id
+        )
+
+        if not (
+            config["rules_channel_id"]
+            and config["rules_message_id"]
+        ):
+            await interaction.response.send_message(
+                "The server rules haven't been configured yet. "
+                "Please let a server administrator know.",
+                ephemeral=True
+            )
+            return
+
+        now = datetime.now(timezone.utc).isoformat()
+
+        self.bot.database.set_member_profile(
+            self.member.guild.id,
+            self.member.id,
+            "rules_acknowledged",
+            1
+        )
+
+        self.bot.database.set_member_profile(
+            self.member.guild.id,
+            self.member.id,
+            "rules_acknowledged_at",
+            now
+        )
+
+        self.bot.database.set_member_profile(
+            self.member.guild.id,
+            self.member.id,
+            "onboarding_step",
+            "completed"
+        )
+
+        self.bot.database.set_member_profile(
+            self.member.guild.id,
+            self.member.id,
+            "onboarding_completed_at",
+            now
+        )
+
+        profile = self.bot.database.get_member_profile(
+            self.member.guild.id,
+            self.member.id
+        )
+
+        view = OnboardingCompleteView(
+            self.bot,
+            self.member
+        )
+
+        embed = build_onboarding_profile_embed(
+            self.member,
+            profile
+        )
+
+        await interaction.response.edit_message(
+            content=None,
+            embed=embed,
+            view=view
+        )
+
+        view.message = interaction.message
+
 
 class Welcome(commands.Cog):
     def __init__(self, bot):
@@ -871,7 +1496,10 @@ class Welcome(commands.Cog):
                 "Welcome! Just take a moment to get situated, "
                 "if you please."
             ),
-            view=WelcomeView(self.bot, member)
+            view=WelcomeView(
+                self.bot,
+                member
+            )
         )
 
         self.bot.database.set_member_profile(
