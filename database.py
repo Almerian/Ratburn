@@ -15,7 +15,6 @@ class Database:
         self.initialize()
 
     def initialize(self):
-        # Guild configuration
         self.connection.execute("""
             CREATE TABLE IF NOT EXISTS guild_config (
                 guild_id INTEGER PRIMARY KEY,
@@ -29,7 +28,7 @@ class Database:
                 audit_log_channel_id INTEGER,
                 timezone TEXT,
                 rules_channel_id INTEGER,
-                rules_message_id INTEGER,
+                rules_message_id INTEGER
             )
         """)
 
