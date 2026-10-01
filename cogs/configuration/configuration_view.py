@@ -121,6 +121,16 @@ class ConfigView(discord.ui.View):
             inline=True
         )
 
+        embed.add_field(
+            name="Rules Message",
+            value=(
+                "🟢 Configured"
+                if config["rules_message_id"]
+                else "🔴 Not configured"
+            ),
+            inline=True
+        )
+
         return embed
 
     @discord.ui.button(
@@ -229,6 +239,11 @@ class ConfigSettingSelect(discord.ui.Select):
                 label="Timezone",
                 value="timezone",
                 emoji="🌎"
+            ),
+            discord.SelectOption(
+                label="Rules Message",
+                value="rules_message",
+                emoji="📜"
             ),
         ]
 
@@ -359,6 +374,20 @@ class ConfigSettingSelect(discord.ui.Select):
             )
             return
 
+        if setting == "rules_message":
+            view = RulesMessageView(
+                self.bot,
+                self.guild_id
+            )
+
+            await interaction.response.edit_message(
+                content=(
+                    "**Choose the rules message Ratburn should use.**"
+                ),
+                embed=None,
+                view=view
+            )
+            return
 
         await interaction.response.send_message(
             f"`{setting}` is not implemented yet.",
@@ -1272,4 +1301,163 @@ class AuditLogChannelSelect(discord.ui.ChannelSelect):
                 "Click **Save** to apply this change."
             ),
             view=self.view
+        )
+
+
+class RulesMessageView(discord.ui.View):
+    def __init__(self, bot, guild_id: int):
+        super().__init__(timeout=300)
+
+        self.bot = bot
+        self.guild_id = guild_id
+
+    @discord.ui.button(
+        label="Enter Rules Message",
+        emoji="📜",
+        style=discord.ButtonStyle.primary
+    )
+    async def enter_rules_message(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+        await interaction.response.send_modal(
+            RulesMessageModal(
+                self.bot,
+                self.guild_id
+            )
+        )
+
+    @discord.ui.button(
+        label="Back",
+        emoji="◀️",
+        style=discord.ButtonStyle.secondary
+    )
+    async def back(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+        view = ConfigEditView(
+            self.bot,
+            self.guild_id
+        )
+
+        await interaction.response.edit_message(
+            content="**What would you like to configure?**",
+            embed=None,
+            view=view
+        )
+
+
+class RulesMessageModal(
+    discord.ui.Modal,
+    title="Rules Message"
+):
+    message_link = discord.ui.TextInput(
+        label="Discord message link",
+        placeholder="https://discord.com/channels/...",
+        required=True,
+        max_length=200
+    )
+
+    def __init__(self, bot, guild_id: int):
+        super().__init__()
+
+        self.bot = bot
+        self.guild_id = guild_id
+
+    async def on_submit(
+        self,
+        interaction: discord.Interaction
+    ):
+        link = self.message_link.value.strip()
+
+        parts = link.rstrip("/").split("/")
+
+        if len(parts) < 3:
+            await interaction.response.send_message(
+                "That doesn't look like a valid Discord message link.",
+                ephemeral=True
+            )
+            return
+
+        try:
+            message_id = int(parts[-1])
+            channel_id = int(parts[-2])
+            guild_id = int(parts[-3])
+        except ValueError:
+            await interaction.response.send_message(
+                "That doesn't look like a valid Discord message link.",
+                ephemeral=True
+            )
+            return
+
+        if guild_id != self.guild_id:
+            await interaction.response.send_message(
+                "That message belongs to a different server.",
+                ephemeral=True
+            )
+            return
+
+        guild = interaction.guild
+
+        if guild is None:
+            await interaction.response.send_message(
+                "I couldn't determine which server this is.",
+                ephemeral=True
+            )
+            return
+
+        channel = guild.get_channel(channel_id)
+
+        if channel is None:
+            await interaction.response.send_message(
+                "I couldn't find that channel in this server.",
+                ephemeral=True
+            )
+            return
+
+        try:
+            message = await channel.fetch_message(message_id)
+        except discord.NotFound:
+            await interaction.response.send_message(
+                "I couldn't find that message.",
+                ephemeral=True
+            )
+            return
+        except discord.Forbidden:
+            await interaction.response.send_message(
+                "I don't have permission to read that message.",
+                ephemeral=True
+            )
+            return
+        except discord.HTTPException:
+            await interaction.response.send_message(
+                "Something went wrong while checking that message.",
+                ephemeral=True
+            )
+            return
+
+        self.bot.database.set_config(
+            self.guild_id,
+            "rules_channel_id",
+            channel.id
+        )
+
+        self.bot.database.set_config(
+            self.guild_id,
+            "rules_message_id",
+            message.id
+        )
+
+        view = ConfigView(
+            self.bot,
+            self.guild_id
+        )
+
+        await interaction.response.edit_message(
+            content=None,
+            embed=view.build_embed(),
+            view=view
         )
