@@ -17,9 +17,62 @@ class Database:
     def initialize(self):
         self.connection.execute("""
             CREATE TABLE IF NOT EXISTS guild_config (
-                guild_id INTEGER PRIMARY KEY
+                guild_id INTEGER PRIMARY KEY,
+                staff_role_id INTEGER,
+                detention_role_id INTEGER,
+                detention_channel_id INTEGER,
+                rat_trap_channel_id INTEGER,
+                birthday_channel_id INTEGER,
+                event_channel_id INTEGER,
+                audit_log_channel_id INTEGER,
+                timezone TEXT
             )
         """)
+
+        self.connection.commit()
+
+    def ensure_guild(self, guild_id: int):
+        self.connection.execute("""
+            INSERT OR IGNORE INTO guild_config (guild_id)
+            VALUES (?)
+        """, (guild_id,))
+
+        self.connection.commit()
+
+    def get_config(self, guild_id: int):
+        self.ensure_guild(guild_id)
+
+        return self.connection.execute("""
+            SELECT *
+            FROM guild_config
+            WHERE guild_id = ?
+        """, (guild_id,)).fetchone()
+
+    def set_config(self, guild_id: int, setting: str, value):
+        self.ensure_guild(guild_id)
+
+        allowed_settings = {
+            "staff_role_id",
+            "detention_role_id",
+            "detention_channel_id",
+            "rat_trap_channel_id",
+            "birthday_channel_id",
+            "event_channel_id",
+            "audit_log_channel_id",
+            "timezone",
+        }
+
+        if setting not in allowed_settings:
+            raise ValueError(f"Invalid configuration setting: {setting}")
+
+        self.connection.execute(
+            f"""
+            UPDATE guild_config
+            SET {setting} = ?
+            WHERE guild_id = ?
+            """,
+            (value, guild_id)
+        )
 
         self.connection.commit()
 
