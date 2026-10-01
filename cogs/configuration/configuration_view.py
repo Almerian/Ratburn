@@ -159,7 +159,7 @@ class ConfigView(discord.ui.View):
         )
     
         print("3 - CONFIG MESSAGE EDITED")
-        )
+        
 
 
 class ConfigEditView(discord.ui.View):
