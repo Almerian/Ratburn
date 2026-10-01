@@ -143,23 +143,16 @@ class ConfigView(discord.ui.View):
         interaction: discord.Interaction,
         button: discord.ui.Button
     ):
-        print("1 - CONFIG BUTTON CLICKED")
-    
         view = ConfigEditView(
             self.bot,
             self.guild_id
         )
-    
-        print("2 - CONFIG EDIT VIEW CREATED")
-    
+
         await interaction.response.edit_message(
             content="**What would you like to configure?**",
             embed=None,
             view=view
         )
-    
-        print("3 - CONFIG MESSAGE EDITED")
-        
 
 
 class ConfigEditView(discord.ui.View):
@@ -285,7 +278,7 @@ class ConfigSettingSelect(discord.ui.Select):
                 self.bot,
                 self.guild_id
             )
-        
+
             await interaction.response.edit_message(
                 content="**Choose the detention role Ratburn should use.**",
                 embed=None,
@@ -293,13 +286,12 @@ class ConfigSettingSelect(discord.ui.Select):
             )
             return
 
-
         if setting == "detention_channel_id":
             view = DetentionChannelView(
                 self.bot,
                 self.guild_id
             )
-        
+
             await interaction.response.edit_message(
                 content="**Choose the channel Ratburn should use for detention.**",
                 embed=None,
@@ -307,13 +299,12 @@ class ConfigSettingSelect(discord.ui.Select):
             )
             return
 
-
         if setting == "rat_trap_channel_id":
             view = RatTrapChannelView(
                 self.bot,
                 self.guild_id
             )
-        
+
             await interaction.response.edit_message(
                 content="**Choose the channel Ratburn should use as the Rat-Trap.**",
                 embed=None,
@@ -321,10 +312,12 @@ class ConfigSettingSelect(discord.ui.Select):
             )
             return
 
-
         if setting == "welcome_channel_id":
-            view = WelcomeChannelView(self.bot, self.guild_id)
-        
+            view = WelcomeChannelView(
+                self.bot,
+                self.guild_id
+            )
+
             await interaction.response.edit_message(
                 content="**Choose the channel where Ratburn will welcome new members.**",
                 embed=None,
@@ -332,39 +325,38 @@ class ConfigSettingSelect(discord.ui.Select):
             )
             return
 
-
         if setting == "birthday_channel_id":
             view = BirthdayChannelView(
                 self.bot,
                 self.guild_id
             )
-        
+
             await interaction.response.edit_message(
                 content="**Choose the channel Ratburn should use for birthday announcements.**",
                 embed=None,
                 view=view
             )
             return
-        
+
         if setting == "event_channel_id":
             view = EventChannelView(
                 self.bot,
                 self.guild_id
             )
-        
+
             await interaction.response.edit_message(
                 content="**Choose the channel Ratburn should use for events and reminders.**",
                 embed=None,
                 view=view
             )
             return
-        
+
         if setting == "audit_log_channel_id":
             view = AuditLogChannelView(
                 self.bot,
                 self.guild_id
             )
-        
+
             await interaction.response.edit_message(
                 content="**Choose the channel Ratburn should use for audit logs.**",
                 embed=None,
@@ -372,10 +364,12 @@ class ConfigSettingSelect(discord.ui.Select):
             )
             return
 
-
         if setting == "timezone":
-            view = TimezoneView(self.bot, self.guild_id)
-        
+            view = TimezoneView(
+                self.bot,
+                self.guild_id
+            )
+
             await interaction.response.edit_message(
                 content="**Choose the timezone used by this server.**",
                 embed=None,
@@ -390,9 +384,7 @@ class ConfigSettingSelect(discord.ui.Select):
             )
 
             await interaction.response.edit_message(
-                content=(
-                    "**Choose the rules message Ratburn should use.**"
-                ),
+                content="**Choose the rules message Ratburn should use.**",
                 embed=None,
                 view=view
             )
@@ -462,7 +454,12 @@ class TimezoneView(discord.ui.View):
         self.bot = bot
         self.guild_id = guild_id
 
-        self.add_item(TimezoneSelect(bot, guild_id))
+        self.add_item(
+            TimezoneSelect(
+                bot,
+                guild_id
+            )
+        )
 
     @discord.ui.button(
         label="Save",
@@ -490,75 +487,6 @@ class TimezoneView(discord.ui.View):
             self.guild_id,
             "timezone",
             select.selected_timezone
-        )
-
-        view = ConfigView(self.bot, self.guild_id)
-
-        await interaction.response.edit_message(
-            content=None,
-            embed=view.build_embed(),
-            view=view
-        )
-
-    @discord.ui.button(
-        label="Back",
-        emoji="◀️",
-        style=discord.ButtonStyle.secondary
-    )
-    async def back(
-        self,
-        interaction: discord.Interaction,
-        button: discord.ui.Button
-    ):
-        view = ConfigEditView(self.bot, self.guild_id)
-
-        await interaction.response.edit_message(
-            content="**What would you like to configure?**",
-            embed=None,
-            view=view
-        )
-
-
-class StaffRoleView(discord.ui.View):
-    def __init__(self, bot, guild_id: int):
-        super().__init__(timeout=300)
-
-        self.bot = bot
-        self.guild_id = guild_id
-
-        self.add_item(
-            StaffRoleSelect(
-                bot,
-                guild_id
-            )
-        )
-
-    @discord.ui.button(
-        label="Save",
-        emoji="💾",
-        style=discord.ButtonStyle.success
-    )
-    async def save(
-        self,
-        interaction: discord.Interaction,
-        button: discord.ui.Button
-    ):
-        select = self.children[0]
-
-        if not isinstance(select, StaffRoleSelect):
-            return
-
-        if select.selected_role_id is None:
-            await interaction.response.send_message(
-                "Please choose a role first.",
-                ephemeral=True
-            )
-            return
-
-        self.bot.database.set_config(
-            self.guild_id,
-            "staff_role_id",
-            select.selected_role_id
         )
 
         view = ConfigView(
@@ -594,6 +522,99 @@ class StaffRoleView(discord.ui.View):
         )
 
 
+class StaffRoleView(discord.ui.View):
+    def __init__(self, bot, guild_id: int):
+        super().__init__(timeout=300)
+
+        self.bot = bot
+        self.guild_id = guild_id
+
+        self.add_item(
+            StaffRoleSelect(
+                bot,
+                guild_id
+            )
+        )
+
+    @discord.ui.button(
+        label="Save",
+        emoji="💾",
+        style=discord.ButtonStyle.success
+    )
+    async def save(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+        print("STAFF ROLE SAVE CLICKED")
+
+        select = self.children[0]
+        print(f"FIRST CHILD: {type(select).__name__}")
+
+        if not isinstance(select, StaffRoleSelect):
+            print("ERROR: FIRST CHILD IS NOT STAFF ROLE SELECT")
+            return
+
+        print(f"SELECTED ROLE ID: {select.selected_role_id}")
+
+        if select.selected_role_id is None:
+            print("NO ROLE SELECTED")
+
+            await interaction.response.send_message(
+                "Please choose a role first.",
+                ephemeral=True
+            )
+
+            print("NO-ROLE RESPONSE SENT")
+            return
+
+        print("ABOUT TO SAVE TO DATABASE")
+
+        self.bot.database.set_config(
+            self.guild_id,
+            "staff_role_id",
+            select.selected_role_id
+        )
+
+        print("DATABASE SAVE COMPLETE")
+
+        view = ConfigView(
+            self.bot,
+            self.guild_id
+        )
+
+        print("CONFIG VIEW CREATED")
+
+        await interaction.response.edit_message(
+            content=None,
+            embed=view.build_embed(),
+            view=view
+        )
+
+        print("STAFF ROLE SAVE MESSAGE EDITED")
+
+    @discord.ui.button(
+        label="Back",
+        emoji="◀️",
+        style=discord.ButtonStyle.secondary
+    )
+    async def back(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+        view = ConfigEditView(
+            self.bot,
+            self.guild_id
+        )
+
+        await interaction.response.edit_message(
+            content="**What would you like to configure?**",
+            embed=None,
+            view=view
+        )
+
+
 class StaffRoleSelect(discord.ui.RoleSelect):
     def __init__(self, bot, guild_id: int):
         self.bot = bot
@@ -606,22 +627,20 @@ class StaffRoleSelect(discord.ui.RoleSelect):
             max_values=1
         )
 
-    async def callback(self, interaction: discord.Interaction):
-        print("STAFF ROLE SELECT CALLBACK FIRED")
-    
+    async def callback(
+        self,
+        interaction: discord.Interaction
+    ):
         self.selected_role_id = self.values[0].id
-    
-        print(f"SELECTED ROLE ID: {self.selected_role_id}")
-    
+
         await interaction.response.edit_message(
             content=(
-                f"**Staff role selected:** <@&{self.selected_role_id}>\n\n"
+                f"**Staff role selected:** "
+                f"{self.values[0].mention}\n\n"
                 "Click **Save** to apply this change."
             ),
             view=self.view
         )
-    
-        print("STAFF ROLE MESSAGE EDITED")
 
 
 class DetentionRoleView(discord.ui.View):
@@ -946,7 +965,12 @@ class WelcomeChannelView(discord.ui.View):
         self.bot = bot
         self.guild_id = guild_id
 
-        self.add_item(WelcomeChannelSelect(bot, guild_id))
+        self.add_item(
+            WelcomeChannelSelect(
+                bot,
+                guild_id
+            )
+        )
 
     @discord.ui.button(
         label="Back",
@@ -958,7 +982,10 @@ class WelcomeChannelView(discord.ui.View):
         interaction: discord.Interaction,
         button: discord.ui.Button
     ):
-        view = ConfigEditView(self.bot, self.guild_id)
+        view = ConfigEditView(
+            self.bot,
+            self.guild_id
+        )
 
         await interaction.response.edit_message(
             content="**What would you like to configure?**",
@@ -974,12 +1001,17 @@ class WelcomeChannelSelect(discord.ui.ChannelSelect):
 
         super().__init__(
             placeholder="Choose the welcome channel...",
-            channel_types=[discord.ChannelType.text],
+            channel_types=[
+                discord.ChannelType.text
+            ],
             min_values=1,
             max_values=1
         )
 
-    async def callback(self, interaction: discord.Interaction):
+    async def callback(
+        self,
+        interaction: discord.Interaction
+    ):
         channel = self.values[0]
 
         self.bot.database.set_config(
@@ -988,7 +1020,10 @@ class WelcomeChannelSelect(discord.ui.ChannelSelect):
             channel.id
         )
 
-        view = ConfigView(self.bot, self.guild_id)
+        view = ConfigView(
+            self.bot,
+            self.guild_id
+        )
 
         await interaction.response.edit_message(
             content=None,
