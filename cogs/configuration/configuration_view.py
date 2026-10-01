@@ -428,7 +428,10 @@ class TimezoneSelect(discord.ui.Select):
             options=options
         )
 
-    async def callback(self, interaction: discord.Interaction):
+    async def callback(
+        self,
+        interaction: discord.Interaction
+    ):
         self.selected_timezone = self.values[0]
 
         selected_option = next(
@@ -471,9 +474,16 @@ class TimezoneView(discord.ui.View):
         interaction: discord.Interaction,
         button: discord.ui.Button
     ):
-        select = self.children[0]
+        select = next(
+            (
+                child
+                for child in self.children
+                if isinstance(child, TimezoneSelect)
+            ),
+            None
+        )
 
-        if not isinstance(select, TimezoneSelect):
+        if select is None:
             return
 
         if select.selected_timezone is None:
@@ -546,8 +556,6 @@ class StaffRoleView(discord.ui.View):
         interaction: discord.Interaction,
         button: discord.ui.Button
     ):
-        print("STAFF ROLE SAVE CLICKED")
-
         select = next(
             (
                 child
@@ -556,27 +564,16 @@ class StaffRoleView(discord.ui.View):
             ),
             None
         )
-        
-        print(f"STAFF ROLE SELECT FOUND: {select is not None}")
-        
+
         if select is None:
-            print("ERROR: STAFF ROLE SELECT NOT FOUND")
             return
 
-        print(f"SELECTED ROLE ID: {select.selected_role_id}")
-
         if select.selected_role_id is None:
-            print("NO ROLE SELECTED")
-
             await interaction.response.send_message(
                 "Please choose a role first.",
                 ephemeral=True
             )
-
-            print("NO-ROLE RESPONSE SENT")
             return
-
-        print("ABOUT TO SAVE TO DATABASE")
 
         self.bot.database.set_config(
             self.guild_id,
@@ -584,22 +581,16 @@ class StaffRoleView(discord.ui.View):
             select.selected_role_id
         )
 
-        print("DATABASE SAVE COMPLETE")
-
         view = ConfigView(
             self.bot,
             self.guild_id
         )
-
-        print("CONFIG VIEW CREATED")
 
         await interaction.response.edit_message(
             content=None,
             embed=view.build_embed(),
             view=view
         )
-
-        print("STAFF ROLE SAVE MESSAGE EDITED")
 
     @discord.ui.button(
         label="Back",
@@ -675,9 +666,16 @@ class DetentionRoleView(discord.ui.View):
         interaction: discord.Interaction,
         button: discord.ui.Button
     ):
-        select = self.children[0]
+        select = next(
+            (
+                child
+                for child in self.children
+                if isinstance(child, DetentionRoleSelect)
+            ),
+            None
+        )
 
-        if not isinstance(select, DetentionRoleSelect):
+        if select is None:
             return
 
         if select.selected_role_id is None:
@@ -778,9 +776,16 @@ class DetentionChannelView(discord.ui.View):
         interaction: discord.Interaction,
         button: discord.ui.Button
     ):
-        select = self.children[0]
+        select = next(
+            (
+                child
+                for child in self.children
+                if isinstance(child, DetentionChannelSelect)
+            ),
+            None
+        )
 
-        if not isinstance(select, DetentionChannelSelect):
+        if select is None:
             return
 
         if select.selected_channel_id is None:
@@ -884,9 +889,16 @@ class RatTrapChannelView(discord.ui.View):
         interaction: discord.Interaction,
         button: discord.ui.Button
     ):
-        select = self.children[0]
+        select = next(
+            (
+                child
+                for child in self.children
+                if isinstance(child, RatTrapChannelSelect)
+            ),
+            None
+        )
 
-        if not isinstance(select, RatTrapChannelSelect):
+        if select is None:
             return
 
         if select.selected_channel_id is None:
@@ -1064,9 +1076,16 @@ class BirthdayChannelView(discord.ui.View):
         interaction: discord.Interaction,
         button: discord.ui.Button
     ):
-        select = self.children[0]
+        select = next(
+            (
+                child
+                for child in self.children
+                if isinstance(child, BirthdayChannelSelect)
+            ),
+            None
+        )
 
-        if not isinstance(select, BirthdayChannelSelect):
+        if select is None:
             return
 
         if select.selected_channel_id is None:
@@ -1170,9 +1189,16 @@ class EventChannelView(discord.ui.View):
         interaction: discord.Interaction,
         button: discord.ui.Button
     ):
-        select = self.children[0]
+        select = next(
+            (
+                child
+                for child in self.children
+                if isinstance(child, EventChannelSelect)
+            ),
+            None
+        )
 
-        if not isinstance(select, EventChannelSelect):
+        if select is None:
             return
 
         if select.selected_channel_id is None:
@@ -1276,9 +1302,16 @@ class AuditLogChannelView(discord.ui.View):
         interaction: discord.Interaction,
         button: discord.ui.Button
     ):
-        select = self.children[0]
+        select = next(
+            (
+                child
+                for child in self.children
+                if isinstance(child, AuditLogChannelSelect)
+            ),
+            None
+        )
 
-        if not isinstance(select, AuditLogChannelSelect):
+        if select is None:
             return
 
         if select.selected_channel_id is None:
