@@ -84,6 +84,16 @@ class ConfigView(discord.ui.View):
         )
 
         embed.add_field(
+            name="Welcome Channel",
+            value=(
+                f"🟢 <#{config['welcome_channel_id']}>"
+                if config["welcome_channel_id"]
+                else "🔴 Not configured"
+            ),
+            inline=True
+        )
+
+        embed.add_field(
             name="Birthday Channel",
             value=channel_value(config["birthday_channel_id"]),
             inline=True
@@ -196,6 +206,11 @@ class ConfigSettingSelect(discord.ui.Select):
                 emoji="🐀"
             ),
             discord.SelectOption(
+                label="Welcome Channel",
+                value="welcome_channel_id",
+                emoji="👋"
+            ),
+            discord.SelectOption(
                 label="Birthday Channel",
                 value="birthday_channel_id",
                 emoji="🎂"
@@ -277,6 +292,17 @@ class ConfigSettingSelect(discord.ui.Select):
         
             await interaction.response.edit_message(
                 content="**Choose the channel Ratburn should use as the Rat-Trap.**",
+                embed=None,
+                view=view
+            )
+            return
+
+
+        if setting == "welcome_channel_id":
+            view = WelcomeChannelView(self.bot, self.guild_id)
+        
+            await interaction.response.edit_message(
+                content="**Choose the channel where Ratburn will welcome new members.**",
                 embed=None,
                 view=view
             )
@@ -870,6 +896,64 @@ class RatTrapChannelSelect(discord.ui.ChannelSelect):
                 "Click **Save** to apply this change."
             ),
             view=self.view
+        )
+
+
+class WelcomeChannelView(discord.ui.View):
+    def __init__(self, bot, guild_id: int):
+        super().__init__(timeout=300)
+
+        self.bot = bot
+        self.guild_id = guild_id
+
+        self.add_item(WelcomeChannelSelect(bot, guild_id))
+
+    @discord.ui.button(
+        label="Back",
+        emoji="◀️",
+        style=discord.ButtonStyle.secondary
+    )
+    async def back(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+        view = ConfigEditView(self.bot, self.guild_id)
+
+        await interaction.response.edit_message(
+            content="**What would you like to configure?**",
+            embed=None,
+            view=view
+        )
+
+
+class WelcomeChannelSelect(discord.ui.ChannelSelect):
+    def __init__(self, bot, guild_id: int):
+        self.bot = bot
+        self.guild_id = guild_id
+
+        super().__init__(
+            placeholder="Choose the welcome channel...",
+            channel_types=[discord.ChannelType.text],
+            min_values=1,
+            max_values=1
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        channel = self.values[0]
+
+        self.bot.database.set_config(
+            self.guild_id,
+            "welcome_channel_id",
+            channel.id
+        )
+
+        view = ConfigView(self.bot, self.guild_id)
+
+        await interaction.response.edit_message(
+            content=None,
+            embed=view.build_embed(),
+            view=view
         )
 
 
