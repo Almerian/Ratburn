@@ -27,7 +27,9 @@ class Database:
                 birthday_channel_id INTEGER,
                 event_channel_id INTEGER,
                 audit_log_channel_id INTEGER,
-                timezone TEXT
+                timezone TEXT,
+                rules_channel_id INTEGER,
+                rules_message_id INTEGER,
             )
         """)
 
@@ -50,6 +52,8 @@ class Database:
             "event_channel_id": "INTEGER",
             "audit_log_channel_id": "INTEGER",
             "timezone": "TEXT",
+            "rules_channel_id": "INTEGER",
+            "rules_message_id": "INTEGER",
         }
 
         for column, column_type in new_columns.items():
@@ -59,7 +63,6 @@ class Database:
                     f"{column} {column_type}"
                 )
 
-        # Member profiles
         self.connection.execute("""
             CREATE TABLE IF NOT EXISTS member_profiles (
                 guild_id INTEGER NOT NULL,
@@ -150,6 +153,8 @@ class Database:
             "event_channel_id",
             "audit_log_channel_id",
             "timezone",
+            "rules_channel_id",
+            "rules_message_id",
         }
 
         if setting not in allowed_settings:
