@@ -64,14 +64,25 @@ class Database:
             CREATE TABLE IF NOT EXISTS member_profiles (
                 guild_id INTEGER NOT NULL,
                 user_id INTEGER NOT NULL,
+
                 birthday_month INTEGER,
                 birthday_day INTEGER,
                 birthday_year INTEGER,
+
                 pronouns TEXT,
                 pronoun_index INTEGER NOT NULL DEFAULT 0,
+
+                nickname TEXT,
+
+                timezone TEXT,
+
                 rules_acknowledged INTEGER NOT NULL DEFAULT 0,
                 rules_acknowledged_at TEXT,
-                timezone TEXT,
+
+                onboarding_message_id INTEGER,
+                onboarding_step TEXT,
+                onboarding_completed_at TEXT,
+
                 PRIMARY KEY (guild_id, user_id)
             )
         """)
@@ -91,9 +102,13 @@ class Database:
             "birthday_year": "INTEGER",
             "pronouns": "TEXT",
             "pronoun_index": "INTEGER NOT NULL DEFAULT 0",
+            "nickname": "TEXT",
+            "timezone": "TEXT",
             "rules_acknowledged": "INTEGER NOT NULL DEFAULT 0",
             "rules_acknowledged_at": "TEXT",
-            "timezone": "TEXT",
+            "onboarding_message_id": "INTEGER",
+            "onboarding_step": "TEXT",
+            "onboarding_completed_at": "TEXT",
         }
 
         for column, column_type in new_member_columns.items():
@@ -185,9 +200,13 @@ class Database:
             "birthday_year",
             "pronouns",
             "pronoun_index",
+            "nickname",
+            "timezone",
             "rules_acknowledged",
             "rules_acknowledged_at",
-            "timezone",
+            "onboarding_message_id",
+            "onboarding_step",
+            "onboarding_completed_at",
         }
 
         if setting not in allowed_settings:
