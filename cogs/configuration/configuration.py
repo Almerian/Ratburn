@@ -27,7 +27,7 @@ class Configuration(commands.Cog):
         await interaction.response.send_message(
             embed=view.build_embed(),
             view=view,
-            ephemeral=True
+            #ephemeral=True
         )
 
 
