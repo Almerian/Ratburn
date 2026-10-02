@@ -690,7 +690,36 @@ class DetentionRoleView(discord.ui.View):
             "detention_role_id",
             select.selected_role_id
         )
-
+        
+        config = self.bot.database.get_config(self.guild_id)
+        
+        channel = interaction.guild.get_channel(
+            config["detention_channel_id"]
+        )
+        
+        if channel is not None:
+            configuration = self.bot.get_cog("Configuration")
+        
+            if configuration is not None:
+                detention_role = interaction.guild.get_role(
+                    select.selected_role_id
+                )
+        
+                staff_role = (
+                    interaction.guild.get_role(
+                        config["staff_role_id"]
+                    )
+                    if config["staff_role_id"]
+                    else None
+                )
+        
+                if detention_role is not None:
+                    await configuration.configure_detention_channel(
+                        channel,
+                        staff_role,
+                        detention_role
+                    )
+        
         view = ConfigView(
             self.bot,
             self.guild_id
