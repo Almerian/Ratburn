@@ -354,6 +354,47 @@ class Filter(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+    
+
+    
+# TEMPORARY TESTER — DELETE AFTER TESTING
+    @app_commands.command(
+        name="filtertest",
+        description="TEMPORARY: Test the chat filter matcher."
+    )
+    @app_commands.default_permissions(administrator=True)
+    @app_commands.describe(message="Message text to test.")
+    async def filtertest(
+        self,
+        interaction: discord.Interaction,
+        message: str
+    ):
+        config = self.bot.database.get_config(interaction.guild.id)
+
+        words = [
+            row["word"]
+            for row in self.bot.database.get_filtered_words(
+                interaction.guild.id
+            )
+        ]
+
+        match = find_filtered_word(message, words)
+
+        if match is None:
+            result = "No filtered word detected."
+        else:
+            result = f"Matched filtered entry: `{match}`"
+
+        await interaction.response.send_message(
+            result,
+            ephemeral=True
+        )
+
+# END TEMPORARY TESTER
+
+
+    
+
     @app_commands.command(
         name="filter",
         description="View and manage Ratburn's chat filter."
@@ -417,39 +458,3 @@ class Filter(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(Filter(bot))
-
-
-
-if __name__ == "__main__":
-    test_words = [
-        "bitch",
-        "b!tch",
-        "blub lubber",
-        "ass",
-    ]
-
-    test_messages = [
-        "bitch",
-        "BITCH!",
-        "(bitch)",
-        "bitching",
-        "class",
-        "b!tch",
-        "b!tch!",
-        "blub lubber",
-        "blub lubber!",
-        "lubber",
-        "blub",
-        "blub-lubber",
-        "ass",
-        "class",
-        "asshole",
-    ]
-
-    for message in test_messages:
-        match = find_filtered_word(message, test_words)
-
-        print(
-            f"{message!r:20} -> "
-            f"{match!r}"
-        )
