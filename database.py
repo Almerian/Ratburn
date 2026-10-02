@@ -122,6 +122,18 @@ class Database:
 
         self.connection.commit()
 
+    
+        self.connection.execute("""
+            CREATE TABLE IF NOT EXISTS filtered_words (
+                guild_id INTEGER NOT NULL,
+                word TEXT NOT NULL COLLATE NOCASE,
+                added_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (guild_id, word)
+            )
+        """)
+
+        self.connection.commit()
+
     def ensure_guild(self, guild_id: int):
         self.connection.execute("""
             INSERT OR IGNORE INTO guild_config (guild_id)
