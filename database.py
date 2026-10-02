@@ -143,11 +143,32 @@ class Database:
                 mute_duration_value INTEGER,
                 mute_duration_unit TEXT,
                 detention_demerit_threshold INTEGER,
+                detention_duration_value INTEGER,
+                detention_duration_unit TEXT,
                 ban_demerit_threshold INTEGER,
                 demerit_expiration_value INTEGER,
                 demerit_expiration_unit TEXT
             )
         """)
+
+        existing_discipline_columns = {
+            row["name"]
+            for row in self.connection.execute(
+                "PRAGMA table_info(discipline_config)"
+            ).fetchall()
+        }
+
+        new_discipline_columns = {
+            "detention_duration_value": "INTEGER",
+            "detention_duration_unit": "TEXT",
+        }
+
+        for column, column_type in new_discipline_columns.items():
+            if column not in existing_discipline_columns:
+                self.connection.execute(
+                    f"ALTER TABLE discipline_config ADD COLUMN "
+                    f"{column} {column_type}"
+                )
 
         self.connection.commit()
 
@@ -292,7 +313,7 @@ class Database:
             guild_id,
             user_id
         )).fetchall()
-#============================================================
+#==================================DO NOT REMOVE==================================
     def clear_discipline_records(
         self,
         guild_id: int,
@@ -308,7 +329,7 @@ class Database:
         ))
 
         self.connection.commit()
-#============================================================
+#==================================DO NOT REMOVE==================================
     def get_discipline_config(self, guild_id: int):
         return self.connection.execute("""
             SELECT *
@@ -327,6 +348,8 @@ class Database:
             "mute_duration_value",
             "mute_duration_unit",
             "detention_demerit_threshold",
+            "detention_duration_value",
+            "detention_duration_unit",
             "ban_demerit_threshold",
             "demerit_expiration_value",
             "demerit_expiration_unit",
