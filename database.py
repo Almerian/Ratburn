@@ -122,13 +122,26 @@ class Database:
 
         self.connection.commit()
 
-    
         self.connection.execute("""
             CREATE TABLE IF NOT EXISTS filtered_words (
                 guild_id INTEGER NOT NULL,
                 word TEXT NOT NULL COLLATE NOCASE,
                 added_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 PRIMARY KEY (guild_id, word)
+            )
+        """)
+
+        self.connection.commit()
+
+        self.connection.execute("""
+            CREATE TABLE IF NOT EXISTS discipline (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                guild_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                action TEXT NOT NULL,
+                reason TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                status TEXT NOT NULL DEFAULT 'active'
             )
         """)
 
@@ -201,7 +214,7 @@ class Database:
         """, (guild_id, word))
 
         self.connection.commit()
-        
+
     def reset_filtered_words_to_default(
         self,
         guild_id: int,
@@ -211,7 +224,7 @@ class Database:
             DELETE FROM filtered_words
             WHERE guild_id = ?
         """, (guild_id,))
-    
+
         self.connection.executemany("""
             INSERT OR IGNORE INTO filtered_words (
                 guild_id,
@@ -222,7 +235,7 @@ class Database:
             (guild_id, word)
             for word in default_words
         ])
-    
+
         self.connection.commit()
 
     def get_filtered_words(self, guild_id: int):
@@ -233,15 +246,78 @@ class Database:
             ORDER BY word COLLATE NOCASE
         """, (guild_id,)).fetchall()
 
+    def add_discipline_record(
+        self,
+        guild_id: int,
+        user_id: int,
+        action: str,
+        reason: str
+    ):
+        self.connection.execute("""
+            INSERT INTO discipline (
+                guild_id,
+                user_id,
+                action,
+                reason
+            )
+            VALUES (?, ?, ?, ?)
+        """, (
+            guild_id,
+            user_id,
+            action,
+            reason
+        ))
+
+        self.connection.commit()
+
+    def get_active_discipline_records(
+        self,
+        guild_id: int,
+        user_id: int
+    ):
+        return self.connection.execute("""
+            SELECT *
+            FROM discipline
+            WHERE guild_id = ?
+            AND user_id = ?
+            AND status = 'active'
+            ORDER BY created_at ASC
+        """, (
+            guild_id,
+            user_id
+        )).fetchall()
+
+    def has_active_warning(
+        self,
+        guild_id: int,
+        user_id: int
+    ) -> bool:
+        row = self.connection.execute("""
+            SELECT 1
+            FROM discipline
+            WHERE guild_id = ?
+            AND user_id = ?
+            AND action = 'warning'
+            AND status = 'active'
+            LIMIT 1
+        """, (
+            guild_id,
+            user_id
+        )).fetchone()
+
+        return row is not None
+
     def ensure_member(self, guild_id: int, user_id: int):
         self.connection.execute("""
             INSERT OR IGNORE INTO member_profiles (guild_id, user_id)
             VALUES (?, ?)
         """, (guild_id, user_id))
+
         self.connection.commit()
 
     def get_member_profile(self, guild_id: int, user_id: int):
         self.ensure_member(guild_id, user_id)
+
         return self.connection.execute("""
             SELECT *
             FROM member_profiles
