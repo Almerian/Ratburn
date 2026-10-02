@@ -1,7 +1,9 @@
+import re
 
 import discord
 from discord import app_commands
 from discord.ext import commands
+
 from .defaults import DEFAULT_FILTER_WORDS
 
 
@@ -310,23 +312,11 @@ class RemoveWordsModal(discord.ui.Modal, title="Remove Filtered Words"):
             )
             return
 
-        removed = 0
         for word in words:
-            before = len(
-                self.filter_view.bot.database.get_filtered_words(
-                    self.filter_view.guild_id
-                )
-            )
             self.filter_view.bot.database.remove_filtered_word(
                 self.filter_view.guild_id,
                 word
             )
-            after = len(
-                self.filter_view.bot.database.get_filtered_words(
-                    self.filter_view.guild_id
-                )
-            )
-            removed += before - after
 
         self.filter_view.words = [
             row["word"]
@@ -344,6 +334,20 @@ class RemoveWordsModal(discord.ui.Modal, title="Remove Filtered Words"):
             embed=self.filter_view.build_embed(),
             view=self.filter_view
         )
+
+
+def find_filtered_word(message_content: str, filtered_words: list[str]):
+    for word in filtered_words:
+        pattern = rf"(?<!\w){re.escape(word)}(?!\w)"
+
+        if re.search(
+            pattern,
+            message_content,
+            flags=re.IGNORECASE
+        ):
+            return word
+
+    return None
 
 
 class Filter(commands.Cog):
