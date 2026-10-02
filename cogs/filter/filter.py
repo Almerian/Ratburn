@@ -1,10 +1,20 @@
 import re
+import random
 
 import discord
 from discord import app_commands
 from discord.ext import commands
 
 from .defaults import DEFAULT_FILTER_WORDS
+
+
+FILTER_RESPONSES = [
+    "You can't say that!",
+    "Absolutely not.",
+    "Watch your language.",
+    "That word isn't appropriate.",
+    "Nope. Not in my classroom!",
+]
 
 
 class DefaultConfirmView(discord.ui.View):
@@ -391,11 +401,12 @@ class Filter(commands.Cog):
             message.author.id
         )
         
-        print(
-            f"Filter match in {message.guild.name}: "
-            f"{message.author} matched {match!r} "
-            f"→ {action}"
-        )
+        response = random.choice(FILTER_RESPONSES)
+
+        if action == "warning":
+            response += "\nThis is just a warning."
+        
+        await message.reply(response)
     
     @app_commands.command(
         name="filter",
