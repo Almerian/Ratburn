@@ -182,16 +182,35 @@ class Database:
 
         self.connection.commit()
 
-    def ensure_member(self, guild_id: int, user_id: int):
+    def add_filtered_word(self, guild_id: int, word: str):
         self.connection.execute("""
-            INSERT OR IGNORE INTO member_profiles (
+            INSERT OR IGNORE INTO filtered_words (
                 guild_id,
-                user_id
+                word
             )
             VALUES (?, ?)
-        """, (guild_id, user_id))
+        """, (guild_id, word))
 
         self.connection.commit()
+
+    def remove_filtered_word(self, guild_id: int, word: str):
+        self.connection.execute("""
+            DELETE FROM filtered_words
+            WHERE guild_id = ?
+            AND word = ?
+        """, (guild_id, word))
+
+        self.connection.commit()
+
+    def get_filtered_words(self, guild_id: int):
+        return self.connection.execute("""
+            SELECT word
+            FROM filtered_words
+            WHERE guild_id = ?
+            ORDER BY word COLLATE NOCASE
+        """, (guild_id,)).fetchall()
+
+    def ensure_member(self, guild_id: int, user_id: int):
 
     def get_member_profile(self, guild_id: int, user_id: int):
         self.ensure_member(guild_id, user_id)
