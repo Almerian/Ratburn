@@ -15,11 +15,19 @@ class Configuration(commands.Cog):
         staff_role: discord.Role | None,
         detention_role: discord.Role
     ):
+        
+        await channel.set_permissions(
+            channel.guild.me,
+            view_channel=True,
+            send_messages=True,
+            read_message_history=True
+        )
+    
         await channel.set_permissions(
             channel.guild.default_role,
             view_channel=False
         )
-
+    
         await channel.set_permissions(
             detention_role,
             view_channel=True,
@@ -29,7 +37,7 @@ class Configuration(commands.Cog):
             create_private_threads=False,
             send_messages_in_threads=False
         )
-
+    
         if staff_role is not None:
             await channel.set_permissions(
                 staff_role,
