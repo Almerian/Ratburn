@@ -14,6 +14,16 @@ FILTER_RESPONSES = [
     "Watch your language.",
     "That word isn't appropriate.",
     "Nope. Not in my classroom!",
+    "We do not use language like that here.",
+    "Mind your manners.",
+    "That is not acceptable language.",
+    "Please choose your words more carefully.",
+    "Let's keep the language appropriate.",
+    "I expect better language than that.",
+    "We can find a more appropriate way to say that.",
+    "That kind of language has no place here.",
+    "Language, please!",
+    "Let's try that again without the potty mouth!",
 ]
 
 
