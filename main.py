@@ -58,6 +58,11 @@ class Ratburn(commands.Bot):
         await super().close()
 
 
+from database import DATABASE_PATH
+
+logger.info("Database file: %s", DATABASE_PATH.resolve())
+
+
 bot = Ratburn()
 
 bot.run(TOKEN)
