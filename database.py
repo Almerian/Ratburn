@@ -132,10 +132,23 @@ class Database:
                 action TEXT NOT NULL,
                 reason TEXT NOT NULL,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                expires_at TEXT,
                 status TEXT NOT NULL DEFAULT 'active'
             )
         """)
 
+        existing_discipline_columns = {
+            row["name"]
+            for row in self.connection.execute(
+                "PRAGMA table_info(discipline)"
+            ).fetchall()
+        }
+        
+        if "expires_at" not in existing_discipline_columns:
+            self.connection.execute(
+                "ALTER TABLE discipline ADD COLUMN expires_at TEXT"
+            )
+        
         self.connection.execute("""
             CREATE TABLE IF NOT EXISTS discipline_config (
                 guild_id INTEGER PRIMARY KEY,
@@ -278,23 +291,26 @@ class Database:
         guild_id: int,
         user_id: int,
         action: str,
-        reason: str
+        reason: str,
+        expires_at: str | None = None
     ):
         self.connection.execute("""
             INSERT INTO discipline (
                 guild_id,
                 user_id,
                 action,
-                reason
+                reason,
+                expires_at
             )
-            VALUES (?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?)
         """, (
             guild_id,
             user_id,
             action,
-            reason
+            reason,
+            expires_at
         ))
-
+    
         self.connection.commit()
 
     def get_active_discipline_records(
@@ -313,6 +329,26 @@ class Database:
             guild_id,
             user_id
         )).fetchall()
+
+    def get_expired_detentions(self):
+        return self.connection.execute("""
+            SELECT *
+            FROM discipline
+            WHERE action = 'detention'
+            AND status = 'active'
+            AND expires_at IS NOT NULL
+            AND expires_at <= datetime('now')
+            ORDER BY expires_at ASC
+        """).fetchall()
+
+    def expire_discipline_record(self, record_id: int):
+        self.connection.execute("""
+            UPDATE discipline
+            SET status = 'expired'
+            WHERE id = ?
+        """, (record_id,))
+    
+        self.connection.commit()
 #==================================DO NOT REMOVE==================================
     def clear_discipline_records(
         self,
