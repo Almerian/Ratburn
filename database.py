@@ -32,8 +32,6 @@ class Database:
             )
         """)
 
-        self.connection.commit()
-
         existing_columns = {
             row["name"]
             for row in self.connection.execute(
@@ -75,7 +73,6 @@ class Database:
                 pronoun_index INTEGER NOT NULL DEFAULT 0,
 
                 nickname TEXT,
-
                 timezone TEXT,
 
                 rules_acknowledged INTEGER NOT NULL DEFAULT 0,
@@ -88,8 +85,6 @@ class Database:
                 PRIMARY KEY (guild_id, user_id)
             )
         """)
-
-        self.connection.commit()
 
         existing_member_columns = {
             row["name"]
@@ -120,8 +115,6 @@ class Database:
                     f"{column} {column_type}"
                 )
 
-        self.connection.commit()
-
         self.connection.execute("""
             CREATE TABLE IF NOT EXISTS filtered_words (
                 guild_id INTEGER NOT NULL,
@@ -130,8 +123,6 @@ class Database:
                 PRIMARY KEY (guild_id, word)
             )
         """)
-
-        self.connection.commit()
 
         self.connection.execute("""
             CREATE TABLE IF NOT EXISTS discipline (
@@ -144,8 +135,6 @@ class Database:
                 status TEXT NOT NULL DEFAULT 'active'
             )
         """)
-
-        self.connection.commit()
 
         self.connection.execute("""
             CREATE TABLE IF NOT EXISTS discipline_config (
@@ -180,8 +169,6 @@ class Database:
         """, (guild_id,)).fetchone()
 
     def set_config(self, guild_id: int, setting: str, value):
-        self.ensure_guild(guild_id)
-
         allowed_settings = {
             "staff_role_id",
             "detention_role_id",
@@ -197,7 +184,11 @@ class Database:
         }
 
         if setting not in allowed_settings:
-            raise ValueError(f"Invalid configuration setting: {setting}")
+            raise ValueError(
+                f"Invalid configuration setting: {setting}"
+            )
+
+        self.ensure_guild(guild_id)
 
         self.connection.execute(
             f"""
@@ -301,28 +292,7 @@ class Database:
             guild_id,
             user_id
         )).fetchall()
-
-    def has_active_warning(
-        self,
-        guild_id: int,
-        user_id: int
-    ) -> bool:
-        row = self.connection.execute("""
-            SELECT 1
-            FROM discipline
-            WHERE guild_id = ?
-            AND user_id = ?
-            AND action = 'warning'
-            AND status = 'active'
-            LIMIT 1
-        """, (
-            guild_id,
-            user_id
-        )).fetchone()
-
-        return row is not None
-
-    # ============================================================
+#============================================================
     def clear_discipline_records(
         self,
         guild_id: int,
@@ -338,9 +308,7 @@ class Database:
         ))
 
         self.connection.commit()
-
-    # ============================================================
-
+#============================================================
     def get_discipline_config(self, guild_id: int):
         return self.connection.execute("""
             SELECT *
@@ -379,20 +347,18 @@ class Database:
             ON CONFLICT(guild_id)
             DO UPDATE SET
                 {setting} = excluded.{setting}
-            """.format(
-                setting=setting
-            ),
-            (
-                guild_id,
-                value
-            )
+            """,
+            (guild_id, value)
         )
 
         self.connection.commit()
 
     def ensure_member(self, guild_id: int, user_id: int):
         self.connection.execute("""
-            INSERT OR IGNORE INTO member_profiles (guild_id, user_id)
+            INSERT OR IGNORE INTO member_profiles (
+                guild_id,
+                user_id
+            )
             VALUES (?, ?)
         """, (guild_id, user_id))
 
@@ -406,7 +372,10 @@ class Database:
             FROM member_profiles
             WHERE guild_id = ?
             AND user_id = ?
-        """, (guild_id, user_id)).fetchone()
+        """, (
+            guild_id,
+            user_id
+        )).fetchone()
 
     def set_member_profile(
         self,
