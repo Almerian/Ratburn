@@ -201,6 +201,29 @@ class Database:
         """, (guild_id, word))
 
         self.connection.commit()
+        
+    def reset_filtered_words_to_default(
+        self,
+        guild_id: int,
+        default_words: list[str]
+    ):
+        self.connection.execute("""
+            DELETE FROM filtered_words
+            WHERE guild_id = ?
+        """, (guild_id,))
+    
+        self.connection.executemany("""
+            INSERT OR IGNORE INTO filtered_words (
+                guild_id,
+                word
+            )
+            VALUES (?, ?)
+        """, [
+            (guild_id, word)
+            for word in default_words
+        ])
+    
+        self.connection.commit()
 
     def get_filtered_words(self, guild_id: int):
         return self.connection.execute("""
