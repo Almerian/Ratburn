@@ -20,6 +20,7 @@ class DisciplineConfigView(discord.ui.View):
             mute_threshold = "Not configured"
             mute_duration = "Not configured"
             detention_threshold = "Not configured"
+            detention_duration = "Not configured"
             ban_threshold = "Not configured"
             expiration = "Not configured"
 
@@ -35,6 +36,11 @@ class DisciplineConfigView(discord.ui.View):
 
             detention_threshold = format_config_value(
                 config["detention_demerit_threshold"]
+            )
+
+            detention_duration = format_duration(
+                config["detention_duration_value"],
+                config["detention_duration_unit"]
             )
 
             ban_threshold = format_config_value(
@@ -65,7 +71,10 @@ class DisciplineConfigView(discord.ui.View):
 
         embed.add_field(
             name="Detention",
-            value=f"**Demerit threshold:** {detention_threshold}",
+            value=(
+                f"**Demerit threshold:** {detention_threshold}\n"
+                f"**Duration:** {detention_duration}"
+            ),
             inline=False
         )
 
@@ -290,13 +299,19 @@ class DetentionConfigView(discord.ui.View):
             self.guild_id
         )
 
-        threshold = (
-            format_config_value(
+        if config is None:
+            threshold = "Not configured"
+            duration = "Not configured"
+
+        else:
+            threshold = format_config_value(
                 config["detention_demerit_threshold"]
             )
-            if config is not None
-            else "Not configured"
-        )
+
+            duration = format_duration(
+                config["detention_duration_value"],
+                config["detention_duration_unit"]
+            )
 
         embed = discord.Embed(
             title="⛓️ Detention Configuration",
@@ -306,6 +321,12 @@ class DetentionConfigView(discord.ui.View):
         embed.add_field(
             name="Demerit Threshold",
             value=threshold,
+            inline=False
+        )
+
+        embed.add_field(
+            name="Duration",
+            value=duration,
             inline=False
         )
 
@@ -320,6 +341,11 @@ class DetentionSettingSelect(discord.ui.Select):
                 emoji="⚠️",
                 description="Set how many demerits trigger detention."
             ),
+            discord.SelectOption(
+                label="Duration",
+                emoji="⏱️",
+                description="Set how long detention lasts."
+            ),
         ]
 
         super().__init__(
@@ -328,15 +354,29 @@ class DetentionSettingSelect(discord.ui.Select):
         )
 
     async def callback(self, interaction: discord.Interaction):
-        await interaction.response.send_modal(
-            ThresholdModal(
-                bot=self.view.bot,
-                guild_id=self.view.guild_id,
-                setting="detention_demerit_threshold",
-                title="Detention Demerit Threshold",
-                destination=DetentionConfigView
+        selected = self.values[0]
+
+        if selected == "Demerit Threshold":
+            await interaction.response.send_modal(
+                ThresholdModal(
+                    bot=self.view.bot,
+                    guild_id=self.view.guild_id,
+                    setting="detention_demerit_threshold",
+                    title="Detention Demerit Threshold",
+                    destination=DetentionConfigView
+                )
             )
-        )
+
+        elif selected == "Duration":
+            view = DetentionDurationView(
+                self.view.bot,
+                self.view.guild_id
+            )
+
+            await interaction.response.edit_message(
+                embed=view.build_embed(),
+                view=view
+            )
 
 
 class BanConfigView(discord.ui.View):
@@ -632,6 +672,66 @@ class EditMuteDurationButton(discord.ui.Button):
         )
 
 
+class DetentionDurationView(discord.ui.View):
+    def __init__(self, bot, guild_id: int):
+        super().__init__(timeout=300)
+
+        self.bot = bot
+        self.guild_id = guild_id
+
+        self.add_item(EditDetentionDurationButton())
+        self.add_item(NavigationButton(
+            label="Back",
+            destination=DetentionConfigView
+        ))
+
+    def build_embed(self):
+        config = self.bot.database.get_discipline_config(
+            self.guild_id
+        )
+
+        if (
+            config is not None
+            and config["detention_duration_value"] is not None
+            and config["detention_duration_unit"] is not None
+        ):
+            duration = (
+                f"{config['detention_duration_value']} "
+                f"{config['detention_duration_unit']}"
+            )
+        else:
+            duration = "Not configured"
+
+        embed = discord.Embed(
+            title="⏱️ Detention Duration",
+            description="Configure how long detention lasts."
+        )
+
+        embed.add_field(
+            name="Duration",
+            value=duration,
+            inline=False
+        )
+
+        return embed
+
+
+class EditDetentionDurationButton(discord.ui.Button):
+    def __init__(self):
+        super().__init__(
+            label="Edit Duration",
+            style=discord.ButtonStyle.primary
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.send_modal(
+            DetentionDurationModal(
+                self.view.bot,
+                self.view.guild_id
+            )
+        )
+
+
 class ThresholdModal(discord.ui.Modal):
     def __init__(
         self,
@@ -779,6 +879,87 @@ class MuteDurationModal(discord.ui.Modal):
         )
 
         view = MuteDurationView(
+            self.bot,
+            self.guild_id
+        )
+
+        await interaction.response.edit_message(
+            embed=view.build_embed(),
+            view=view
+        )
+
+
+class DetentionDurationModal(discord.ui.Modal):
+    def __init__(self, bot, guild_id: int):
+        super().__init__(title="Detention Duration")
+
+        self.bot = bot
+        self.guild_id = guild_id
+
+        self.duration_value = discord.ui.TextInput(
+            label="Duration",
+            placeholder="Example: 24",
+            required=True,
+            max_length=5
+        )
+
+        self.duration_unit = discord.ui.TextInput(
+            label="Unit",
+            placeholder="minutes, hours, or days",
+            required=True,
+            max_length=7
+        )
+
+        self.add_item(self.duration_value)
+        self.add_item(self.duration_unit)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            value = int(self.duration_value.value)
+
+            if value < 1:
+                raise ValueError
+
+        except ValueError:
+            await interaction.response.send_message(
+                "Duration must be a whole number greater than 0.",
+                ephemeral=True
+            )
+            return
+
+        unit = self.duration_unit.value.strip().lower()
+
+        allowed_units = {
+            "minute": "minutes",
+            "minutes": "minutes",
+            "hour": "hours",
+            "hours": "hours",
+            "day": "days",
+            "days": "days"
+        }
+
+        if unit not in allowed_units:
+            await interaction.response.send_message(
+                "Unit must be minutes, hours, or days.",
+                ephemeral=True
+            )
+            return
+
+        unit = allowed_units[unit]
+
+        self.bot.database.set_discipline_config(
+            self.guild_id,
+            "detention_duration_value",
+            value
+        )
+
+        self.bot.database.set_discipline_config(
+            self.guild_id,
+            "detention_duration_unit",
+            unit
+        )
+
+        view = DetentionDurationView(
             self.bot,
             self.guild_id
         )
