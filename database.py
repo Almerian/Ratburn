@@ -211,16 +211,20 @@ class Database:
         """, (guild_id,)).fetchall()
 
     def ensure_member(self, guild_id: int, user_id: int):
+    self.connection.execute("""
+        INSERT OR IGNORE INTO member_profiles (guild_id, user_id)
+        VALUES (?, ?)
+    """, (guild_id, user_id))
+    self.connection.commit()
 
-        def get_member_profile(self, guild_id: int, user_id: int):
-            self.ensure_member(guild_id, user_id)
-    
-            return self.connection.execute("""
-                SELECT *
-                FROM member_profiles
-                WHERE guild_id = ?
-                AND user_id = ?
-            """, (guild_id, user_id)).fetchone()
+    def get_member_profile(self, guild_id: int, user_id: int):
+        self.ensure_member(guild_id, user_id)
+        return self.connection.execute("""
+            SELECT *
+            FROM member_profiles
+            WHERE guild_id = ?
+            AND user_id = ?
+        """, (guild_id, user_id)).fetchone()
 
     def set_member_profile(
         self,
