@@ -85,6 +85,177 @@ class FilterView(discord.ui.View):
             view=self
         )
 
+    @discord.ui.button(
+        label="Add Words",
+        emoji="➕",
+        style=discord.ButtonStyle.success,
+        row=1
+    )
+    async def add_button(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+        if not interaction.user.guild_permissions.administrator:
+            await interaction.response.send_message(
+                "Sorry, you need to be an admin for that!",
+                ephemeral=True
+            )
+            return
+
+        await interaction.response.send_modal(
+            AddWordsModal(self)
+        )
+
+    @discord.ui.button(
+        label="Remove Words",
+        emoji="➖",
+        style=discord.ButtonStyle.danger,
+        row=1
+    )
+    async def remove_button(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+        if not interaction.user.guild_permissions.administrator:
+            await interaction.response.send_message(
+                "Sorry, you need to be an admin for that!",
+                ephemeral=True
+            )
+            return
+
+        await interaction.response.send_modal(
+            RemoveWordsModal(self)
+        )
+
+
+
+class AddWordsModal(discord.ui.Modal, title="Add Filtered Words"):
+    words = discord.ui.TextInput(
+        label="Words to add",
+        placeholder="word1, word2, word3",
+        style=discord.TextStyle.paragraph,
+        required=True,
+        max_length=1000
+    )
+
+    def __init__(self, view):
+        super().__init__()
+        self.filter_view = view
+
+    async def on_submit(self, interaction: discord.Interaction):
+        words = {
+            word.strip()
+            for word in self.words.value.split(",")
+            if word.strip()
+        }
+
+        if not words:
+            await interaction.response.send_message(
+                "Please enter at least one word.",
+                ephemeral=True
+            )
+            return
+
+        added = 0
+        for word in words:
+            before = len(
+                self.filter_view.bot.database.get_filtered_words(
+                    self.filter_view.guild_id
+                )
+            )
+            self.filter_view.bot.database.add_filtered_word(
+                self.filter_view.guild_id,
+                word
+            )
+            after = len(
+                self.filter_view.bot.database.get_filtered_words(
+                    self.filter_view.guild_id
+                )
+            )
+            added += after - before
+
+        self.filter_view.words = [
+            row["word"]
+            for row in self.filter_view.bot.database.get_filtered_words(
+                self.filter_view.guild_id
+            )
+        ]
+        self.filter_view.page = min(
+            self.filter_view.page,
+            self.filter_view.total_pages - 1
+        )
+        self.filter_view.update_buttons()
+
+        await interaction.response.edit_message(
+            embed=self.filter_view.build_embed(),
+            view=self.filter_view
+        )
+
+
+class RemoveWordsModal(discord.ui.Modal, title="Remove Filtered Words"):
+    words = discord.ui.TextInput(
+        label="Words to remove",
+        placeholder="word1, word2, word3",
+        style=discord.TextStyle.paragraph,
+        required=True,
+        max_length=1000
+    )
+
+    def __init__(self, view):
+        super().__init__()
+        self.filter_view = view
+
+    async def on_submit(self, interaction: discord.Interaction):
+        words = {
+            word.strip()
+            for word in self.words.value.split(",")
+            if word.strip()
+        }
+
+        if not words:
+            await interaction.response.send_message(
+                "Please enter at least one word.",
+                ephemeral=True
+            )
+            return
+
+        removed = 0
+        for word in words:
+            before = len(
+                self.filter_view.bot.database.get_filtered_words(
+                    self.filter_view.guild_id
+                )
+            )
+            self.filter_view.bot.database.remove_filtered_word(
+                self.filter_view.guild_id,
+                word
+            )
+            after = len(
+                self.filter_view.bot.database.get_filtered_words(
+                    self.filter_view.guild_id
+                )
+            )
+            removed += before - after
+
+        self.filter_view.words = [
+            row["word"]
+            for row in self.filter_view.bot.database.get_filtered_words(
+                self.filter_view.guild_id
+            )
+        ]
+        self.filter_view.page = min(
+            self.filter_view.page,
+            self.filter_view.total_pages - 1
+        )
+        self.filter_view.update_buttons()
+
+        await interaction.response.edit_message(
+            embed=self.filter_view.build_embed(),
+            view=self.filter_view
+        )
+
 
 class Filter(commands.Cog):
     def __init__(self, bot):
