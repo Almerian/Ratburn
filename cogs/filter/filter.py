@@ -2,6 +2,71 @@
 import discord
 from discord import app_commands
 from discord.ext import commands
+from .defaults import DEFAULT_FILTER_WORDS
+
+
+class DefaultConfirmView(discord.ui.View):
+    def __init__(self, filter_view):
+        super().__init__(timeout=60)
+        self.filter_view = filter_view
+
+    @discord.ui.button(
+        label="Cancel",
+        style=discord.ButtonStyle.secondary
+    )
+    async def cancel_button(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+        if not interaction.user.guild_permissions.administrator:
+            await interaction.response.send_message(
+                "Sorry, you need to be an admin for that!",
+                ephemeral=True
+            )
+            return
+
+        await interaction.response.edit_message(
+            content="Restoring the default filter was cancelled.",
+            view=None
+        )
+
+    @discord.ui.button(
+        label="Restore Defaults",
+        style=discord.ButtonStyle.danger
+    )
+    async def confirm_button(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+        if not interaction.user.guild_permissions.administrator:
+            await interaction.response.send_message(
+                "Sorry, you need to be an admin for that!",
+                ephemeral=True
+            )
+            return
+
+        self.filter_view.bot.database.reset_filtered_words_to_default(
+            self.filter_view.guild_id,
+            DEFAULT_FILTER_WORDS
+        )
+
+        self.filter_view.words = [
+            row["word"]
+            for row in self.filter_view.bot.database.get_filtered_words(
+                self.filter_view.guild_id
+            )
+        ]
+
+        self.filter_view.page = 0
+        self.filter_view.update_buttons()
+
+        await interaction.response.edit_message(
+            content=None,
+            embed=self.filter_view.build_embed(),
+            view=self.filter_view
+        )
 
 
 class FilterView(discord.ui.View):
@@ -129,6 +194,30 @@ class FilterView(discord.ui.View):
             RemoveWordsModal(self)
         )
 
+    @discord.ui.button(
+        label="Default",
+        emoji="🔄",
+        style=discord.ButtonStyle.secondary,
+        row=1
+    )
+    async def default_button(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+        if not interaction.user.guild_permissions.administrator:
+            await interaction.response.send_message(
+                "Sorry, you need to be an admin for that!",
+                ephemeral=True
+            )
+            return
+    
+        await interaction.response.send_message(
+            "Are you sure you want to replace this server's "
+            "current filter with Ratburn's default filter?",
+            view=DefaultConfirmView(self),
+            ephemeral=True
+        )
 
 
 class AddWordsModal(discord.ui.Modal, title="Add Filtered Words"):
