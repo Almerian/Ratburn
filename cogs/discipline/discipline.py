@@ -3,6 +3,7 @@ from discord.ext import commands, tasks
 from discord import app_commands
 from datetime import datetime, timezone, timedelta
 from .demerit_expiration import is_demerit_active
+from .thresholds import get_punishment_tier
 
 class Discipline(commands.Cog):
     def __init__(self, bot):
@@ -307,7 +308,12 @@ class Discipline(commands.Cog):
             reason
         )
     
-        return "demerit"
+        active_demerit_count = len(active_demerits) + 1
+    
+        return get_punishment_tier(
+            active_demerit_count,
+            discipline_config
+        )
 
 
 async def setup(bot):
