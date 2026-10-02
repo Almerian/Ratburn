@@ -147,6 +147,21 @@ class Database:
 
         self.connection.commit()
 
+        self.connection.execute("""
+            CREATE TABLE IF NOT EXISTS discipline_config (
+                guild_id INTEGER PRIMARY KEY,
+                mute_demerit_threshold INTEGER,
+                mute_duration_value INTEGER,
+                mute_duration_unit TEXT,
+                detention_demerit_threshold INTEGER,
+                ban_demerit_threshold INTEGER,
+                demerit_expiration_value INTEGER,
+                demerit_expiration_unit TEXT
+            )
+        """)
+
+        self.connection.commit()
+
     def ensure_guild(self, guild_id: int):
         self.connection.execute("""
             INSERT OR IGNORE INTO guild_config (guild_id)
@@ -307,7 +322,7 @@ class Database:
 
         return row is not None
 
-#============================================================
+    # ============================================================
     def clear_discipline_records(
         self,
         guild_id: int,
@@ -321,10 +336,60 @@ class Database:
             guild_id,
             user_id
         ))
-    
+
         self.connection.commit()
-#============================================================
-    
+
+    # ============================================================
+
+    def get_discipline_config(self, guild_id: int):
+        return self.connection.execute("""
+            SELECT *
+            FROM discipline_config
+            WHERE guild_id = ?
+        """, (guild_id,)).fetchone()
+
+    def set_discipline_config(
+        self,
+        guild_id: int,
+        setting: str,
+        value
+    ):
+        allowed_settings = {
+            "mute_demerit_threshold",
+            "mute_duration_value",
+            "mute_duration_unit",
+            "detention_demerit_threshold",
+            "ban_demerit_threshold",
+            "demerit_expiration_value",
+            "demerit_expiration_unit",
+        }
+
+        if setting not in allowed_settings:
+            raise ValueError(
+                f"Invalid discipline configuration setting: {setting}"
+            )
+
+        self.connection.execute(
+            f"""
+            INSERT INTO discipline_config (
+                guild_id,
+                {setting}
+            )
+            VALUES (?, ?)
+            ON CONFLICT(guild_id)
+            DO UPDATE SET
+                {setting} = excluded.{setting}
+            """.format(
+                setting=setting
+            ),
+            (
+                guild_id,
+                value
+            )
+        )
+
+        self.connection.commit()
+
     def ensure_member(self, guild_id: int, user_id: int):
         self.connection.execute("""
             INSERT OR IGNORE INTO member_profiles (guild_id, user_id)
