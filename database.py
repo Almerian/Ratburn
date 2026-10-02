@@ -307,6 +307,24 @@ class Database:
 
         return row is not None
 
+#============================================================
+    def clear_discipline_records(
+        self,
+        guild_id: int,
+        user_id: int
+    ):
+        self.connection.execute("""
+            DELETE FROM discipline
+            WHERE guild_id = ?
+            AND user_id = ?
+        """, (
+            guild_id,
+            user_id
+        ))
+    
+        self.connection.commit()
+#============================================================
+    
     def ensure_member(self, guild_id: int, user_id: int):
         self.connection.execute("""
             INSERT OR IGNORE INTO member_profiles (guild_id, user_id)
