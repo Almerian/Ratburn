@@ -380,9 +380,21 @@ class Filter(commands.Cog):
         if match is None:
             return
 
+        discipline = self.bot.get_cog("Discipline")
+
+        if discipline is None:
+            print("Discipline cog is not loaded.")
+            return
+        
+        action = discipline.process_filter_violation(
+            message.guild.id,
+            message.author.id
+        )
+        
         print(
             f"Filter match in {message.guild.name}: "
-            f"{message.author} matched {match!r}"
+            f"{message.author} matched {match!r} "
+            f"→ {action}"
         )
     
     @app_commands.command(
