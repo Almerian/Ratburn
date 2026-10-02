@@ -2,7 +2,7 @@ import discord
 from discord.ext import commands, tasks
 from discord import app_commands
 from datetime import datetime, timezone, timedelta
-
+from .demerit_expiration import is_demerit_active
 
 class Discipline(commands.Cog):
     def __init__(self, bot):
@@ -260,29 +260,53 @@ class Discipline(commands.Cog):
             guild_id,
             user_id
         )
-
-        has_active_demerit = any(
-            record["action"] == "demerit"
-            for record in records
+    
+        discipline_config = self.bot.database.get_discipline_config(
+            guild_id
         )
-
-        if not has_active_demerit:
+    
+        expiration_value = None
+        expiration_unit = None
+    
+        if discipline_config is not None:
+            expiration_value = discipline_config[
+                "demerit_expiration_value"
+            ]
+    
+            expiration_unit = discipline_config[
+                "demerit_expiration_unit"
+            ]
+    
+        active_demerits = []
+    
+        for record in records:
+            if record["action"] != "demerit":
+                continue
+    
+            if is_demerit_active(
+                record["created_at"],
+                expiration_value,
+                expiration_unit
+            ):
+                active_demerits.append(record)
+    
+        if not active_demerits:
             self.bot.database.add_discipline_record(
                 guild_id,
                 user_id,
                 "warning",
                 reason
             )
-
+    
             return "warning"
-
+    
         self.bot.database.add_discipline_record(
             guild_id,
             user_id,
             "demerit",
             reason
         )
-
+    
         return "demerit"
 
 
