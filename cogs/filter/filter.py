@@ -354,47 +354,37 @@ class Filter(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    
+    @commands.Cog.listener()
+    async def on_message(self, message: discord.Message):
+        if message.guild is None:
+            return
 
-    
-# TEMPORARY TESTER — DELETE AFTER TESTING
-    @app_commands.command(
-        name="filtertest",
-        description="TEMPORARY: Test the chat filter matcher."
-    )
-    @app_commands.default_permissions(administrator=True)
-    @app_commands.describe(message="Message text to test.")
-    async def filtertest(
-        self,
-        interaction: discord.Interaction,
-        message: str
-    ):
-        config = self.bot.database.get_config(interaction.guild.id)
+        if message.author.bot:
+            return
 
         words = [
             row["word"]
             for row in self.bot.database.get_filtered_words(
-                interaction.guild.id
+                message.guild.id
             )
         ]
 
-        match = find_filtered_word(message, words)
+        if not words:
+            return
 
-        if match is None:
-            result = "No filtered word detected."
-        else:
-            result = f"Matched filtered entry: `{match}`"
-
-        await interaction.response.send_message(
-            result,
-            ephemeral=True
+        match = find_filtered_word(
+            message.content,
+            words
         )
 
-# END TEMPORARY TESTER
+        if match is None:
+            return
 
-
+        print(
+            f"Filter match in {message.guild.name}: "
+            f"{message.author} matched {match!r}"
+        )
     
-
     @app_commands.command(
         name="filter",
         description="View and manage Ratburn's chat filter."
