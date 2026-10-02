@@ -32,6 +32,7 @@ TIMEZONE_OPTIONS = [
 
 #===========================================================================
 
+
 class ConfigView(discord.ui.View):
     def __init__(self, bot, guild_id: int):
         super().__init__(timeout=300)
@@ -151,6 +152,29 @@ class ConfigView(discord.ui.View):
         await interaction.response.edit_message(
             content="**What would you like to configure?**",
             embed=None,
+            view=view
+        )
+
+    @discord.ui.button(
+        label="Discipline Config",
+        emoji="⚖️",
+        style=discord.ButtonStyle.primary
+    )
+    async def discipline_config(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+        from cogs.discipline.discipline_config_view import DisciplineConfigView
+
+        view = DisciplineConfigView(
+            self.bot,
+            self.guild_id
+        )
+
+        await interaction.response.edit_message(
+            content=None,
+            embed=view.build_embed(),
             view=view
         )
 
@@ -690,21 +714,21 @@ class DetentionRoleView(discord.ui.View):
             "detention_role_id",
             select.selected_role_id
         )
-        
+
         config = self.bot.database.get_config(self.guild_id)
-        
+
         channel = interaction.guild.get_channel(
             config["detention_channel_id"]
         )
-        
+
         if channel is not None:
             configuration = self.bot.get_cog("Configuration")
-        
+
             if configuration is not None:
                 detention_role = interaction.guild.get_role(
                     select.selected_role_id
                 )
-        
+
                 staff_role = (
                     interaction.guild.get_role(
                         config["staff_role_id"]
@@ -712,14 +736,14 @@ class DetentionRoleView(discord.ui.View):
                     if config["staff_role_id"]
                     else None
                 )
-        
+
                 if detention_role is not None:
                     await configuration.configure_detention_channel(
                         channel,
                         staff_role,
                         detention_role
                     )
-        
+
         view = ConfigView(
             self.bot,
             self.guild_id
