@@ -211,11 +211,11 @@ class Database:
         """, (guild_id,)).fetchall()
 
     def ensure_member(self, guild_id: int, user_id: int):
-    self.connection.execute("""
-        INSERT OR IGNORE INTO member_profiles (guild_id, user_id)
-        VALUES (?, ?)
-    """, (guild_id, user_id))
-    self.connection.commit()
+        self.connection.execute("""
+            INSERT OR IGNORE INTO member_profiles (guild_id, user_id)
+            VALUES (?, ?)
+        """, (guild_id, user_id))
+        self.connection.commit()
 
     def get_member_profile(self, guild_id: int, user_id: int):
         self.ensure_member(guild_id, user_id)
