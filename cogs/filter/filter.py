@@ -27,7 +27,6 @@ class Filter(commands.GroupCog, group_name="filter"):
         name="list",
         description="View the words currently in Ratburn's chat filter."
     )
-    @app_commands.default_permissions(manage_guild=True)
     async def list(self, interaction: discord.Interaction):
         pass
 
