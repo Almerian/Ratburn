@@ -26,40 +26,51 @@ class Discipline(commands.Cog):
                 ephemeral=True
             )
             return
-    
+
         self.bot.database.clear_discipline_records(
             ctx.guild.id,
             user.id
         )
-    
+
         await ctx.send(
             f"Cleared all discipline records for {user.mention}.",
             ephemeral=True
         )
-#============================================================    
-    def process_filter_violation(
+#============================================================
+    def process_violation(
         self,
         guild_id: int,
-        user_id: int
+        user_id: int,
+        reason: str
     ) -> str:
-        database = self.bot.database
-
-        if database.has_active_warning(
+        records = self.bot.database.get_active_discipline_records(
             guild_id,
             user_id
-        ):
-            action = "demerit"
-        else:
-            action = "warning"
-
-        database.add_discipline_record(
-            guild_id,
-            user_id,
-            action,
-            "chat_filter"
         )
 
-        return action
+        has_active_demerit = any(
+            record["action"] == "demerit"
+            for record in records
+        )
+
+        if not has_active_demerit:
+            self.bot.database.add_discipline_record(
+                guild_id,
+                user_id,
+                "warning",
+                reason
+            )
+
+            return "warning"
+
+        self.bot.database.add_discipline_record(
+            guild_id,
+            user_id,
+            "demerit",
+            reason
+        )
+
+        return "demerit"
 
 
 async def setup(bot):
