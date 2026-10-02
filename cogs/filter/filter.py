@@ -417,3 +417,39 @@ class Filter(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(Filter(bot))
+
+
+
+if __name__ == "__main__":
+    test_words = [
+        "bitch",
+        "b!tch",
+        "blub lubber",
+        "ass",
+    ]
+
+    test_messages = [
+        "bitch",
+        "BITCH!",
+        "(bitch)",
+        "bitching",
+        "class",
+        "b!tch",
+        "b!tch!",
+        "blub lubber",
+        "blub lubber!",
+        "lubber",
+        "blub",
+        "blub-lubber",
+        "ass",
+        "class",
+        "asshole",
+    ]
+
+    for message in test_messages:
+        match = find_filtered_word(message, test_words)
+
+        print(
+            f"{message!r:20} -> "
+            f"{match!r}"
+        )
