@@ -9,6 +9,33 @@ class Configuration(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+    async def configure_detention_channel(
+        self,
+        channel: discord.TextChannel,
+        staff_role: discord.Role | None,
+        detention_role: discord.Role
+    ):
+        await channel.set_permissions(
+            channel.guild.default_role,
+            view_channel=False
+        )
+
+        await channel.set_permissions(
+            detention_role,
+            view_channel=True,
+            send_messages=False,
+            add_reactions=False,
+            create_public_threads=False,
+            create_private_threads=False,
+            send_messages_in_threads=False
+        )
+
+        if staff_role is not None:
+            await channel.set_permissions(
+                staff_role,
+                view_channel=True
+            )
+
     @app_commands.command(
         name="config",
         description="View and edit Ratburn's server configuration."
@@ -27,7 +54,7 @@ class Configuration(commands.Cog):
         await interaction.response.send_message(
             embed=view.build_embed(),
             view=view,
-            #ephemeral=True
+            ephemeral=True
         )
 
 
