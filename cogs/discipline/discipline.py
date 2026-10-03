@@ -163,9 +163,19 @@ class Discipline(commands.Cog):
 
         active_demerit_count = len(active_demerits) + 1
 
+        print(
+            f"Discipline debug | active_demerits={len(active_demerits)} | "
+            f"new_count={active_demerit_count} | "
+            f"config={discipline_config}"
+        )
+
         punishment_tier = get_punishment_tier(
             active_demerit_count,
             discipline_config
+        )
+
+        print(
+            f"Discipline debug | punishment_tier={punishment_tier}"
         )
 
         guild = self.bot.get_guild(guild_id)
