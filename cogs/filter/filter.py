@@ -233,7 +233,7 @@ class FilterView(discord.ui.View):
                 ephemeral=True
             )
             return
-    
+
         await interaction.response.send_message(
             "Are you sure you want to replace this server's "
             "current filter with Ratburn's default filter?",
@@ -270,21 +270,25 @@ class AddWordsModal(discord.ui.Modal, title="Add Filtered Words"):
             return
 
         added = 0
+
         for word in words:
             before = len(
                 self.filter_view.bot.database.get_filtered_words(
                     self.filter_view.guild_id
                 )
             )
+
             self.filter_view.bot.database.add_filtered_word(
                 self.filter_view.guild_id,
                 word
             )
+
             after = len(
                 self.filter_view.bot.database.get_filtered_words(
                     self.filter_view.guild_id
                 )
             )
+
             added += after - before
 
         self.filter_view.words = [
@@ -293,10 +297,12 @@ class AddWordsModal(discord.ui.Modal, title="Add Filtered Words"):
                 self.filter_view.guild_id
             )
         ]
+
         self.filter_view.page = min(
             self.filter_view.page,
             self.filter_view.total_pages - 1
         )
+
         self.filter_view.update_buttons()
 
         await interaction.response.edit_message(
@@ -344,10 +350,12 @@ class RemoveWordsModal(discord.ui.Modal, title="Remove Filtered Words"):
                 self.filter_view.guild_id
             )
         ]
+
         self.filter_view.page = min(
             self.filter_view.page,
             self.filter_view.total_pages - 1
         )
+
         self.filter_view.update_buttons()
 
         await interaction.response.edit_message(
@@ -405,19 +413,20 @@ class Filter(commands.Cog):
         if discipline is None:
             print("Discipline cog is not loaded.")
             return
-        
-        action = discipline.process_filter_violation(
+
+        action = await discipline.process_violation(
             message.guild.id,
-            message.author.id
+            message.author.id,
+            "chat_filter"
         )
-        
+
         response = random.choice(FILTER_RESPONSES)
 
         if action == "warning":
             response += "\nThis is just a warning."
-        
+
         await message.reply(response)
-    
+
     @app_commands.command(
         name="filter",
         description="View and manage Ratburn's chat filter."
@@ -430,7 +439,10 @@ class Filter(commands.Cog):
             )
             return
 
-        config = self.bot.database.get_config(interaction.guild.id)
+        config = self.bot.database.get_config(
+            interaction.guild.id
+        )
+
         staff_role_id = config["staff_role_id"]
 
         if staff_role_id is None:
@@ -440,7 +452,9 @@ class Filter(commands.Cog):
             )
             return
 
-        staff_role = interaction.guild.get_role(staff_role_id)
+        staff_role = interaction.guild.get_role(
+            staff_role_id
+        )
 
         if staff_role is None:
             await interaction.response.send_message(
