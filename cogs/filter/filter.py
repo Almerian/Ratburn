@@ -269,27 +269,11 @@ class AddWordsModal(discord.ui.Modal, title="Add Filtered Words"):
             )
             return
 
-        added = 0
-
         for word in words:
-            before = len(
-                self.filter_view.bot.database.get_filtered_words(
-                    self.filter_view.guild_id
-                )
-            )
-
             self.filter_view.bot.database.add_filtered_word(
                 self.filter_view.guild_id,
                 word
             )
-
-            after = len(
-                self.filter_view.bot.database.get_filtered_words(
-                    self.filter_view.guild_id
-                )
-            )
-
-            added += after - before
 
         self.filter_view.words = [
             row["word"]
