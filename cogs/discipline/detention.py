@@ -41,7 +41,17 @@ class DetentionManager:
         member = guild.get_member(user_id)
 
         if member is None:
-            return False, "I couldn't find that member."
+            try:
+                member = await guild.fetch_member(user_id)
+        
+            except discord.NotFound:
+                return False, "I couldn't find that member."
+        
+            except discord.Forbidden:
+                return False, "I don't have permission to look up that member."
+        
+            except discord.HTTPException:
+                return False, "Discord rejected the member lookup."
 
         discipline_config = self.bot.database.get_discipline_config(
             guild_id
