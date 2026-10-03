@@ -155,8 +155,6 @@ class DetentionManager:
             detention_role_id = config["detention_role_id"]
 
             if detention_role_id is None:
-                # There is no configured detention role left,
-                # so there is no role for Ratburn to remove.
                 self.bot.database.complete_discipline_record(
                     record["id"]
                 )
@@ -167,8 +165,6 @@ class DetentionManager:
             )
 
             if role is None:
-                # The configured detention role no longer exists.
-                # There is therefore nothing left to remove.
                 self.bot.database.complete_discipline_record(
                     record["id"]
                 )
@@ -209,8 +205,6 @@ class DetentionManager:
                         reason="Detention expired"
                     )
 
-                # Whether the role was present or already absent,
-                # cleanup is now complete.
                 self.bot.database.complete_discipline_record(
                     record["id"]
                 )
@@ -219,8 +213,6 @@ class DetentionManager:
                 discord.Forbidden,
                 discord.HTTPException
             ):
-                # Do NOT mark the record complete.
-                # It remains "expired" and will be retried.
                 continue
 
     @detention_expiry_loop.before_loop
