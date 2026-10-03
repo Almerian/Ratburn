@@ -181,16 +181,18 @@ class Discipline(commands.Cog):
         guild = self.bot.get_guild(guild_id)
 
         if guild is None:
+            print("Discipline debug | guild not found")
             return "demerit"
 
         member = guild.get_member(user_id)
 
         if member is None:
+            print("Discipline debug | member not found")
             return "demerit"
 
         if punishment_tier == "mute":
             print("Discipline debug | entering mute branch")
-            
+
             duration_value = discipline_config["mute_duration_value"]
             duration_unit = discipline_config["mute_duration_unit"]
 
