@@ -337,7 +337,7 @@ class Database:
             WHERE action = 'detention'
             AND status = 'active'
             AND expires_at IS NOT NULL
-            AND expires_at <= datetime('now')
+            AND datetime(expires_at) <= datetime('now')
             ORDER BY expires_at ASC
         """).fetchall()
 
