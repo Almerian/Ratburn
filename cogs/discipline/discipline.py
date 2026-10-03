@@ -189,6 +189,8 @@ class Discipline(commands.Cog):
             return "demerit"
 
         if punishment_tier == "mute":
+            print("Discipline debug | entering mute branch")
+            
             duration_value = discipline_config["mute_duration_value"]
             duration_unit = discipline_config["mute_duration_unit"]
 
