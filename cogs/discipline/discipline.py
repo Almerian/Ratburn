@@ -163,36 +163,29 @@ class Discipline(commands.Cog):
 
         active_demerit_count = len(active_demerits) + 1
 
-        print(
-            f"Discipline debug | active_demerits={len(active_demerits)} | "
-            f"new_count={active_demerit_count} | "
-            f"config={discipline_config}"
-        )
-
         punishment_tier = get_punishment_tier(
             active_demerit_count,
             discipline_config
         )
 
-        print(
-            f"Discipline debug | punishment_tier={punishment_tier}"
-        )
-
         guild = self.bot.get_guild(guild_id)
 
         if guild is None:
-            print("Discipline debug | guild not found")
             return "demerit"
 
         member = guild.get_member(user_id)
 
         if member is None:
-            print("Discipline debug | member not found")
-            return "demerit"
+            try:
+                member = await guild.fetch_member(user_id)
+            except discord.NotFound:
+                return "demerit"
+            except discord.Forbidden:
+                return "demerit"
+            except discord.HTTPException:
+                return "demerit"
 
         if punishment_tier == "mute":
-            print("Discipline debug | entering mute branch")
-
             duration_value = discipline_config["mute_duration_value"]
             duration_unit = discipline_config["mute_duration_unit"]
 
@@ -211,7 +204,6 @@ class Discipline(commands.Cog):
                 )
                 return "mute"
 
-            print(f"Mute failed: {message}")
             return "demerit"
 
         if punishment_tier == "detention":
