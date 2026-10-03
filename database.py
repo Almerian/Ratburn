@@ -330,24 +330,34 @@ class Database:
             user_id
         )).fetchall()
 
+    def mark_expired_detentions(self):
+        self.connection.execute("""
+            UPDATE discipline
+            SET status = 'expired'
+            WHERE action = 'detention'
+            AND status = 'active'
+            AND expires_at IS NOT NULL
+            AND datetime(expires_at) <= datetime('now')
+        """)
+
+        self.connection.commit()
+
     def get_expired_detentions(self):
         return self.connection.execute("""
             SELECT *
             FROM discipline
             WHERE action = 'detention'
-            AND status = 'active'
-            AND expires_at IS NOT NULL
-            AND datetime(expires_at) <= datetime('now')
+            AND status = 'expired'
             ORDER BY expires_at ASC
         """).fetchall()
 
-    def expire_discipline_record(self, record_id: int):
+    def complete_discipline_record(self, record_id: int):
         self.connection.execute("""
             UPDATE discipline
-            SET status = 'expired'
+            SET status = 'complete'
             WHERE id = ?
         """, (record_id,))
-    
+
         self.connection.commit()
 #==================================DO NOT REMOVE==================================
     def clear_discipline_records(
