@@ -182,7 +182,7 @@ class Discipline(commands.Cog):
             duration_value = discipline_config["mute_duration_value"]
             duration_unit = discipline_config["mute_duration_unit"]
 
-            success, _ = await issue_mute(
+            success, message = await issue_mute(
                 member,
                 duration_value,
                 duration_unit
@@ -197,6 +197,7 @@ class Discipline(commands.Cog):
                 )
                 return "mute"
 
+            print(f"Mute failed: {message}")
             return "demerit"
 
         if punishment_tier == "detention":
