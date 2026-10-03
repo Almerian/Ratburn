@@ -80,7 +80,7 @@ class Discipline(commands.Cog):
     def cog_unload(self):
         self.detention.stop()
 
-    async def process_violation(
+        async def process_violation(
         self,
         guild_id: int,
         user_id: int,
@@ -99,13 +99,10 @@ class Discipline(commands.Cog):
         expiration_unit = None
 
         if discipline_config is not None:
-            expiration_value = discipline_config[
-                "demerit_expiration_value"
-            ]
+            expiration_value = discipline_config["demerit_expiration_value"]
+            expiration_unit = discipline_config["demerit_expiration_unit"]
 
-            expiration_unit = discipline_config[
-                "demerit_expiration_unit"
-            ]
+        has_previous_discipline = bool(records)
 
         active_demerits = []
 
@@ -120,14 +117,13 @@ class Discipline(commands.Cog):
             ):
                 active_demerits.append(record)
 
-        if not active_demerits:
+        if not has_previous_discipline:
             self.bot.database.add_discipline_record(
                 guild_id,
                 user_id,
                 "warning",
                 reason
             )
-
             return "warning"
 
         self.bot.database.add_discipline_record(
@@ -155,13 +151,8 @@ class Discipline(commands.Cog):
             return "demerit"
 
         if punishment_tier == "mute":
-            duration_value = discipline_config[
-                "mute_duration_value"
-            ]
-
-            duration_unit = discipline_config[
-                "mute_duration_unit"
-            ]
+            duration_value = discipline_config["mute_duration_value"]
+            duration_unit = discipline_config["mute_duration_unit"]
 
             success, _ = await issue_mute(
                 member,
@@ -176,7 +167,6 @@ class Discipline(commands.Cog):
                     "mute",
                     reason
                 )
-
                 return "mute"
 
             return "demerit"
@@ -194,9 +184,7 @@ class Discipline(commands.Cog):
             return "demerit"
 
         if punishment_tier == "ban":
-            success, _ = await issue_ban(
-                member
-            )
+            success, _ = await issue_ban(member)
 
             if success:
                 self.bot.database.add_discipline_record(
@@ -205,7 +193,6 @@ class Discipline(commands.Cog):
                     "ban",
                     reason
                 )
-
                 return "ban"
 
             return "demerit"
