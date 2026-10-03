@@ -384,18 +384,10 @@ class Filter(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
-        print(
-            f"Filter debug | received | "
-            f"author={message.author} | "
-            f"content={message.content!r}"
-        )
-
         if message.guild is None:
-            print("Filter debug | DM")
             return
 
         if message.author.bot:
-            print("Filter debug | bot message")
             return
 
         words = [
@@ -405,10 +397,6 @@ class Filter(commands.Cog):
             )
         ]
 
-        print(
-            f"Filter debug | loaded {len(words)} filtered words"
-        )
-
         if not words:
             return
 
@@ -417,31 +405,18 @@ class Filter(commands.Cog):
             words
         )
 
-        print(
-            f"Filter debug | match={match!r}"
-        )
-
         if match is None:
             return
 
         discipline = self.bot.get_cog("Discipline")
 
-        print(
-            f"Filter debug | discipline={discipline!r}"
-        )
-
         if discipline is None:
-            print("Discipline cog is not loaded.")
             return
 
         action = await discipline.process_violation(
             message.guild.id,
             message.author.id,
             "chat_filter"
-        )
-
-        print(
-            f"Filter debug | action={action}"
         )
 
         response = random.choice(FILTER_RESPONSES)
