@@ -31,6 +31,11 @@ class AuditLogging(commands.Cog):
         if audit_channel is None:
             return
 
+        content = message.content or "*[No text content]*"
+
+        if len(content) > 4000:
+            content = content[:3997] + "..."
+
         embed = discord.Embed(
             title="🚨 Chat Filter Violation",
             color=discord.Color.orange(),
@@ -57,11 +62,6 @@ class AuditLogging(commands.Cog):
             value=action.replace("_", " ").title(),
             inline=False
         )
-
-        content = message.content or "*[No text content]*"
-
-        if len(content) > 4000:
-            content = content[:3997] + "..."
 
         embed.add_field(
             name="Message",
