@@ -433,7 +433,12 @@ class Filter(commands.Cog):
         if action == "warning":
             response += "\nThis is just a warning."
 
-        await message.reply(response)
+        reply = await message.reply(response)
+
+        try:
+            await message.delete()
+        except (discord.Forbidden, discord.HTTPException):
+            pass
 
     @app_commands.command(
         name="filter",
