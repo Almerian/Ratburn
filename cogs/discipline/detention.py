@@ -127,6 +127,12 @@ class DetentionManager:
 
     @tasks.loop(minutes=1)
     async def detention_expiry_loop(self):
+        # First, move detentions whose timers have ended
+        # from "active" to "expired".
+        self.bot.database.mark_expired_detentions()
+
+        # Now retrieve only records that still need
+        # their detention role removed.
         expired_detentions = (
             self.bot.database.get_expired_detentions()
         )
@@ -149,7 +155,9 @@ class DetentionManager:
             detention_role_id = config["detention_role_id"]
 
             if detention_role_id is None:
-                self.bot.database.expire_discipline_record(
+                # There is no configured detention role left,
+                # so there is no role for Ratburn to remove.
+                self.bot.database.complete_discipline_record(
                     record["id"]
                 )
                 continue
@@ -159,7 +167,9 @@ class DetentionManager:
             )
 
             if role is None:
-                self.bot.database.expire_discipline_record(
+                # The configured detention role no longer exists.
+                # There is therefore nothing left to remove.
+                self.bot.database.complete_discipline_record(
                     record["id"]
                 )
                 continue
@@ -175,15 +185,21 @@ class DetentionManager:
                     )
 
                 except discord.NotFound:
-                    self.bot.database.expire_discipline_record(
+                    # The member is no longer in the server,
+                    # so there is no role to remove.
+                    self.bot.database.complete_discipline_record(
                         record["id"]
                     )
                     continue
 
                 except discord.Forbidden:
+                    # Temporary failure. Keep the record expired
+                    # so the next loop can try again.
                     continue
 
                 except discord.HTTPException:
+                    # Temporary failure. Keep the record expired
+                    # so the next loop can try again.
                     continue
 
             try:
@@ -193,7 +209,9 @@ class DetentionManager:
                         reason="Detention expired"
                     )
 
-                self.bot.database.expire_discipline_record(
+                # Whether the role was present or already absent,
+                # cleanup is now complete.
+                self.bot.database.complete_discipline_record(
                     record["id"]
                 )
 
@@ -201,6 +219,8 @@ class DetentionManager:
                 discord.Forbidden,
                 discord.HTTPException
             ):
+                # Do NOT mark the record complete.
+                # It remains "expired" and will be retried.
                 continue
 
     @detention_expiry_loop.before_loop
