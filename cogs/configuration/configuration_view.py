@@ -698,37 +698,52 @@ class DetentionRoleView(discord.ui.View):
             ),
             None
         )
-
+    
         if select is None:
             return
-
+    
         if select.selected_role_id is None:
             await interaction.response.send_message(
                 "Please choose a role first.",
                 ephemeral=True
             )
             return
-
+    
+        old_config = self.bot.database.get_config(
+            self.guild_id
+        )
+    
+        old_detention_role = None
+    
+        if old_config["detention_role_id"]:
+            old_detention_role = interaction.guild.get_role(
+                old_config["detention_role_id"]
+            )
+    
         self.bot.database.set_config(
             self.guild_id,
             "detention_role_id",
             select.selected_role_id
         )
-
-        config = self.bot.database.get_config(self.guild_id)
-
+    
+        config = self.bot.database.get_config(
+            self.guild_id
+        )
+    
         channel = interaction.guild.get_channel(
             config["detention_channel_id"]
         )
-
+    
         if channel is not None:
-            configuration = self.bot.get_cog("Configuration")
-
+            configuration = self.bot.get_cog(
+                "Configuration"
+            )
+    
             if configuration is not None:
                 detention_role = interaction.guild.get_role(
                     select.selected_role_id
                 )
-
+    
                 staff_role = (
                     interaction.guild.get_role(
                         config["staff_role_id"]
@@ -736,19 +751,21 @@ class DetentionRoleView(discord.ui.View):
                     if config["staff_role_id"]
                     else None
                 )
-
+    
                 if detention_role is not None:
                     await configuration.configure_detention_channel(
+                        interaction.guild,
                         channel,
                         staff_role,
-                        detention_role
+                        detention_role,
+                        old_detention_role
                     )
-
+    
         view = ConfigView(
             self.bot,
             self.guild_id
         )
-
+    
         await interaction.response.edit_message(
             content=None,
             embed=view.build_embed(),
@@ -837,28 +854,76 @@ class DetentionChannelView(discord.ui.View):
             ),
             None
         )
-
+    
         if select is None:
             return
-
+    
         if select.selected_channel_id is None:
             await interaction.response.send_message(
                 "Please choose a channel first.",
                 ephemeral=True
             )
             return
-
+    
+        old_config = self.bot.database.get_config(
+            self.guild_id
+        )
+    
         self.bot.database.set_config(
             self.guild_id,
             "detention_channel_id",
             select.selected_channel_id
         )
-
+    
+        config = self.bot.database.get_config(
+            self.guild_id
+        )
+    
+        if config["detention_role_id"]:
+            configuration = self.bot.get_cog(
+                "Configuration"
+            )
+    
+            detention_role = interaction.guild.get_role(
+                config["detention_role_id"]
+            )
+    
+            staff_role = (
+                interaction.guild.get_role(
+                    config["staff_role_id"]
+                )
+                if config["staff_role_id"]
+                else None
+            )
+    
+            detention_channel = interaction.guild.get_channel(
+                select.selected_channel_id
+            )
+    
+            old_detention_channel = None
+    
+            if old_config["detention_channel_id"]:
+                old_detention_channel = interaction.guild.get_channel(
+                    old_config["detention_channel_id"]
+                )
+    
+            if (
+                configuration is not None
+                and detention_role is not None
+                and detention_channel is not None
+            ):
+                await configuration.configure_detention_channel(
+                    interaction.guild,
+                    detention_channel,
+                    staff_role,
+                    detention_role
+                )
+    
         view = ConfigView(
             self.bot,
             self.guild_id
         )
-
+    
         await interaction.response.edit_message(
             content=None,
             embed=view.build_embed(),
