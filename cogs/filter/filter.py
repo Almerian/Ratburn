@@ -440,6 +440,11 @@ class Filter(commands.Cog):
         except (discord.Forbidden, discord.HTTPException):
             pass
 
+        try:
+            await reply.delete(delay=600)
+        except (discord.Forbidden, discord.HTTPException):
+            pass
+
     @app_commands.command(
         name="filter",
         description="View and manage Ratburn's chat filter."
