@@ -382,61 +382,74 @@ class Filter(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-        @commands.Cog.listener()
-        async def on_message(self, message: discord.Message):
-            if message.guild is None:
-                return
-    
-            if message.author.bot:
-                return
-    
-            words = [
-                row["word"]
-                for row in self.bot.database.get_filtered_words(
-                    message.guild.id
-                )
-            ]
-    
-            if not words:
-                return
-    
-            match = find_filtered_word(
-                message.content,
-                words
+    @commands.Cog.listener()
+    async def on_message(self, message: discord.Message):
+        print(
+            f"Filter debug | received | "
+            f"author={message.author} | "
+            f"content={message.content!r}"
+        )
+
+        if message.guild is None:
+            print("Filter debug | DM")
+            return
+
+        if message.author.bot:
+            print("Filter debug | bot message")
+            return
+
+        words = [
+            row["word"]
+            for row in self.bot.database.get_filtered_words(
+                message.guild.id
             )
-    
-            if match is None:
-                return
-    
-            print(
-                f"Filter debug | matched={match} | "
-                f"user={message.author.id}"
-            )
-    
-            discipline = self.bot.get_cog("Discipline")
-    
-            if discipline is None:
-                print("Discipline cog is not loaded.")
-                return
-    
-            print("Filter debug | calling process_violation")
-    
-            action = await discipline.process_violation(
-                message.guild.id,
-                message.author.id,
-                "chat_filter"
-            )
-    
-            print(
-                f"Filter debug | process_violation returned={action}"
-            )
-    
-            response = random.choice(FILTER_RESPONSES)
-    
-            if action == "warning":
-                response += "\nThis is just a warning."
-    
-            await message.reply(response)
+        ]
+
+        print(
+            f"Filter debug | loaded {len(words)} filtered words"
+        )
+
+        if not words:
+            return
+
+        match = find_filtered_word(
+            message.content,
+            words
+        )
+
+        print(
+            f"Filter debug | match={match!r}"
+        )
+
+        if match is None:
+            return
+
+        discipline = self.bot.get_cog("Discipline")
+
+        print(
+            f"Filter debug | discipline={discipline!r}"
+        )
+
+        if discipline is None:
+            print("Discipline cog is not loaded.")
+            return
+
+        action = await discipline.process_violation(
+            message.guild.id,
+            message.author.id,
+            "chat_filter"
+        )
+
+        print(
+            f"Filter debug | action={action}"
+        )
+
+        response = random.choice(FILTER_RESPONSES)
+
+        if action == "warning":
+            response += "\nThis is just a warning."
+
+        await message.reply(response)
 
     @app_commands.command(
         name="filter",
