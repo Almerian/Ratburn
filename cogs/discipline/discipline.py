@@ -81,151 +81,151 @@ class Discipline(commands.Cog):
     def cog_unload(self):
         self.detention.stop()
 
-        async def process_violation(
-            self,
-            guild_id: int,
-            user_id: int,
-            reason: str
-        ) -> str:
-            records = self.bot.database.get_active_discipline_records(
-                guild_id,
-                user_id
-            )
-    
-            discipline_config = self.bot.database.get_discipline_config(
-                guild_id
-            )
-    
-            has_previous_discipline = bool(records)
-    
-            active_demerits = []
-    
-            for record in records:
-                if record["action"] != "demerit":
-                    continue
-    
-                if is_demerit_active(
-                    record["expires_at"]
-                ):
-                    active_demerits.append(record)
-    
-            if not has_previous_discipline:
-                self.bot.database.add_discipline_record(
-                    guild_id,
-                    user_id,
-                    "warning",
-                    reason
-                )
-                return "warning"
-    
-            expires_at = None
-    
-            if discipline_config is not None:
-                expiration_value = (
-                    discipline_config["demerit_expiration_value"]
-                )
-                expiration_unit = (
-                    discipline_config["demerit_expiration_unit"]
-                )
-    
-                if (
-                    expiration_value is not None
-                    and expiration_unit is not None
-                    and expiration_unit != "never"
-                ):
-                    now = datetime.now(timezone.utc)
-    
-                    if expiration_unit == "days":
-                        expires_at = now + timedelta(
-                            days=expiration_value
-                        )
-    
-                    elif expiration_unit == "weeks":
-                        expires_at = now + timedelta(
-                            weeks=expiration_value
-                        )
-    
-                    elif expiration_unit == "months":
-                        expires_at = now + timedelta(
-                            days=expiration_value * 30
-                        )
-    
-                    if expires_at is not None:
-                        expires_at = expires_at.isoformat()
-    
+    async def process_violation(
+        self,
+        guild_id: int,
+        user_id: int,
+        reason: str
+    ) -> str:
+        records = self.bot.database.get_active_discipline_records(
+            guild_id,
+            user_id
+        )
+
+        discipline_config = self.bot.database.get_discipline_config(
+            guild_id
+        )
+
+        has_previous_discipline = bool(records)
+
+        active_demerits = []
+
+        for record in records:
+            if record["action"] != "demerit":
+                continue
+
+            if is_demerit_active(
+                record["expires_at"]
+            ):
+                active_demerits.append(record)
+
+        if not has_previous_discipline:
             self.bot.database.add_discipline_record(
                 guild_id,
                 user_id,
-                "demerit",
-                reason,
-                expires_at
+                "warning",
+                reason
             )
-    
-            active_demerit_count = len(active_demerits) + 1
-    
-            punishment_tier = get_punishment_tier(
-                active_demerit_count,
-                discipline_config
+            return "warning"
+
+        expires_at = None
+
+        if discipline_config is not None:
+            expiration_value = (
+                discipline_config["demerit_expiration_value"]
             )
-    
-            guild = self.bot.get_guild(guild_id)
-    
-            if guild is None:
-                return "demerit"
-    
-            member = guild.get_member(user_id)
-    
-            if member is None:
-                return "demerit"
-    
-            if punishment_tier == "mute":
-                duration_value = discipline_config["mute_duration_value"]
-                duration_unit = discipline_config["mute_duration_unit"]
-    
-                success, _ = await issue_mute(
-                    member,
-                    duration_value,
-                    duration_unit
-                )
-    
-                if success:
-                    self.bot.database.add_discipline_record(
-                        guild_id,
-                        user_id,
-                        "mute",
-                        reason
+            expiration_unit = (
+                discipline_config["demerit_expiration_unit"]
+            )
+
+            if (
+                expiration_value is not None
+                and expiration_unit is not None
+                and expiration_unit != "never"
+            ):
+                now = datetime.now(timezone.utc)
+
+                if expiration_unit == "days":
+                    expires_at = now + timedelta(
+                        days=expiration_value
                     )
-                    return "mute"
-    
-                return "demerit"
-    
-            if punishment_tier == "detention":
-                success, _ = await self.detention.issue_detention(
+
+                elif expiration_unit == "weeks":
+                    expires_at = now + timedelta(
+                        weeks=expiration_value
+                    )
+
+                elif expiration_unit == "months":
+                    expires_at = now + timedelta(
+                        days=expiration_value * 30
+                    )
+
+                if expires_at is not None:
+                    expires_at = expires_at.isoformat()
+
+        self.bot.database.add_discipline_record(
+            guild_id,
+            user_id,
+            "demerit",
+            reason,
+            expires_at
+        )
+
+        active_demerit_count = len(active_demerits) + 1
+
+        punishment_tier = get_punishment_tier(
+            active_demerit_count,
+            discipline_config
+        )
+
+        guild = self.bot.get_guild(guild_id)
+
+        if guild is None:
+            return "demerit"
+
+        member = guild.get_member(user_id)
+
+        if member is None:
+            return "demerit"
+
+        if punishment_tier == "mute":
+            duration_value = discipline_config["mute_duration_value"]
+            duration_unit = discipline_config["mute_duration_unit"]
+
+            success, _ = await issue_mute(
+                member,
+                duration_value,
+                duration_unit
+            )
+
+            if success:
+                self.bot.database.add_discipline_record(
                     guild_id,
                     user_id,
+                    "mute",
                     reason
                 )
-    
-                if success:
-                    return "detention"
-    
-                return "demerit"
-    
-            if punishment_tier == "ban":
-                success, _ = await issue_ban(member)
-    
-                if success:
-                    self.bot.database.add_discipline_record(
-                        guild_id,
-                        user_id,
-                        "ban",
-                        reason
-                    )
-                    return "ban"
-    
-                return "demerit"
-    
-            return punishment_tier
+                return "mute"
+
+            return "demerit"
+
+        if punishment_tier == "detention":
+            success, _ = await self.detention.issue_detention(
+                guild_id,
+                user_id,
+                reason
+            )
+
+            if success:
+                return "detention"
+
+            return "demerit"
+
+        if punishment_tier == "ban":
+            success, _ = await issue_ban(member)
+
+            if success:
+                self.bot.database.add_discipline_record(
+                    guild_id,
+                    user_id,
+                    "ban",
+                    reason
+                )
+                return "ban"
+
+            return "demerit"
+
+        return punishment_tier
 
 
 async def setup(bot):
