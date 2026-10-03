@@ -419,6 +419,15 @@ class Filter(commands.Cog):
             "chat_filter"
         )
 
+        audit = self.bot.get_cog("AuditLogging")
+
+        if audit is not None:
+            await audit.log_filter_violation(
+                message,
+                match,
+                action
+            )
+
         response = random.choice(FILTER_RESPONSES)
 
         if action == "warning":
