@@ -42,6 +42,7 @@ class Ratburn(commands.Bot):
         await self.load_extension("cogs.configuration")
         await self.load_extension("cogs.rat_trap")
         await self.load_extension("cogs.onboarding")
+        await self.load_extension("cogs.audit_logging")
         await self.load_extension("cogs.filter")
         await self.load_extension("cogs.discipline")
 
