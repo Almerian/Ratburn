@@ -86,9 +86,15 @@ async def return_to_profile(
         member.id
     )
 
+    demerit_count = bot.database.get_demerit_count(
+        member.guild.id,
+        member.id
+    )
+
     embed = build_profile_embed(
         member,
-        profile
+        profile,
+        demerit_count
     )
 
     await interaction.response.edit_message(
@@ -1109,32 +1115,6 @@ class TimezoneSelect(discord.ui.Select):
         )
 
 
-class OnboardingCompleteView(discord.ui.View):
-    def __init__(
-        self,
-        bot,
-        member: discord.Member
-    ):
-        super().__init__(timeout=600)
-
-        self.bot = bot
-        self.member = member
-        self.message = None
-
-    async def check_user(
-        self,
-        interaction: discord.Interaction
-    ):
-        if interaction.user.id != self.member.id:
-            await interaction.response.send_message(
-                "This isn't your onboarding!",
-                ephemeral=True
-            )
-            return False
-
-        return True
-
-
 class RulesView(discord.ui.View):
     def __init__(
         self,
@@ -1252,23 +1232,24 @@ class RulesView(discord.ui.View):
             self.member.id
         )
 
-        view = OnboardingCompleteView(
-            self.bot,
-            self.member
+        demerit_count = self.bot.database.get_demerit_count(
+            self.member.guild.id,
+            self.member.id
         )
 
         embed = build_profile_embed(
             self.member,
-            profile
+            profile,
+            demerit_count
         )
+
+        view = discord.ui.View(timeout=600)
 
         await interaction.response.edit_message(
             content=None,
             embed=embed,
             view=view
         )
-
-        view.message = interaction.message
 
 
 class Welcome(commands.Cog):
