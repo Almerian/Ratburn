@@ -45,6 +45,7 @@ class Ratburn(commands.Bot):
         await self.load_extension("cogs.onboarding")
         await self.load_extension("cogs.birthdays")
         await self.load_extension("cogs.events")
+        await self.load_extension("cogs.daily_quiz")
         await self.load_extension("cogs.audit_logging")
         await self.load_extension("cogs.filter")
         await self.load_extension("cogs.discipline")
