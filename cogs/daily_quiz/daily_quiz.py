@@ -147,7 +147,3 @@ class DailyQuiz(commands.Cog):
             f"Test question posted in {event_channel.mention}.",
             ephemeral=True
         )
-
-
-async def setup(bot):
-    await bot.add_cog(DailyQuiz(bot))
