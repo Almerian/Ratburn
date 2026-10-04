@@ -50,6 +50,11 @@ class Ratburn(commands.Bot):
         await self.load_extension("cogs.filter")
         await self.load_extension("cogs.discipline")
 
+        logger.info(
+            "Commands loaded: %s",
+            [command.name for command in self.tree.get_commands()]
+        )
+                
         synced = await self.tree.sync()
         logger.info("Synced %s slash command(s).", len(synced))
 
