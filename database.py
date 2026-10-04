@@ -143,12 +143,12 @@ class Database:
                 "PRAGMA table_info(discipline)"
             ).fetchall()
         }
-        
+
         if "expires_at" not in existing_discipline_columns:
             self.connection.execute(
                 "ALTER TABLE discipline ADD COLUMN expires_at TEXT"
             )
-        
+
         self.connection.execute("""
             CREATE TABLE IF NOT EXISTS discipline_config (
                 guild_id INTEGER PRIMARY KEY,
@@ -182,6 +182,27 @@ class Database:
                     f"ALTER TABLE discipline_config ADD COLUMN "
                     f"{column} {column_type}"
                 )
+
+        self.connection.execute("""
+            CREATE TABLE IF NOT EXISTS quiz_scores (
+                guild_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                points INTEGER NOT NULL DEFAULT 0,
+
+                PRIMARY KEY (guild_id, user_id)
+            )
+        """)
+
+        self.connection.execute("""
+            CREATE TABLE IF NOT EXISTS quiz_answers (
+                guild_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                quiz_date TEXT NOT NULL,
+                correct INTEGER NOT NULL,
+
+                PRIMARY KEY (guild_id, user_id, quiz_date)
+            )
+        """)
 
         self.connection.commit()
 
@@ -310,7 +331,7 @@ class Database:
             reason,
             expires_at
         ))
-    
+
         self.connection.commit()
 
     def get_active_discipline_records(
@@ -359,6 +380,7 @@ class Database:
         """, (record_id,))
 
         self.connection.commit()
+
 #==================================DO NOT REMOVE==================================
     def clear_discipline_records(
         self,
@@ -376,6 +398,7 @@ class Database:
 
         self.connection.commit()
 #==================================DO NOT REMOVE==================================
+
     def get_discipline_config(self, guild_id: int):
         return self.connection.execute("""
             SELECT *
@@ -502,6 +525,92 @@ class Database:
             """,
             (value, guild_id, user_id)
         )
+
+        self.connection.commit()
+
+    def get_quiz_score(
+        self,
+        guild_id: int,
+        user_id: int
+    ):
+        row = self.connection.execute("""
+            SELECT points
+            FROM quiz_scores
+            WHERE guild_id = ?
+            AND user_id = ?
+        """, (
+            guild_id,
+            user_id
+        )).fetchone()
+
+        if row is None:
+            return 0
+
+        return row["points"]
+
+    def add_quiz_point(
+        self,
+        guild_id: int,
+        user_id: int
+    ):
+        self.connection.execute("""
+            INSERT INTO quiz_scores (
+                guild_id,
+                user_id,
+                points
+            )
+            VALUES (?, ?, 1)
+            ON CONFLICT(guild_id, user_id)
+            DO UPDATE SET
+                points = points + 1
+        """, (
+            guild_id,
+            user_id
+        ))
+
+        self.connection.commit()
+
+    def has_answered_quiz(
+        self,
+        guild_id: int,
+        user_id: int,
+        quiz_date: str
+    ):
+        row = self.connection.execute("""
+            SELECT 1
+            FROM quiz_answers
+            WHERE guild_id = ?
+            AND user_id = ?
+            AND quiz_date = ?
+        """, (
+            guild_id,
+            user_id,
+            quiz_date
+        )).fetchone()
+
+        return row is not None
+
+    def record_quiz_answer(
+        self,
+        guild_id: int,
+        user_id: int,
+        quiz_date: str,
+        correct: bool
+    ):
+        self.connection.execute("""
+            INSERT INTO quiz_answers (
+                guild_id,
+                user_id,
+                quiz_date,
+                correct
+            )
+            VALUES (?, ?, ?, ?)
+        """, (
+            guild_id,
+            user_id,
+            quiz_date,
+            int(correct)
+        ))
 
         self.connection.commit()
 
