@@ -1171,7 +1171,11 @@ class TimezoneSelect(discord.ui.Select):
             )
             return
 
-        view.selected_timezone = self.values[0]
+        selected = self.values[0]
+        view.selected_timezone = selected
+
+        for option in self.options:
+            option.default = option.value == selected
 
         await interaction.response.edit_message(
             view=view
