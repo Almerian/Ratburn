@@ -242,7 +242,9 @@ class BirthdayView(discord.ui.View):
         self.selected_year = None
 
         self.add_item(MonthSelect())
-        self.add_item(DaySelect())
+
+        self.day_button = DayButton()
+        self.add_item(self.day_button)
 
         self.year_button = discord.ui.Button(
             label="Year (optional)",
@@ -446,22 +448,17 @@ class MonthSelect(discord.ui.Select):
         )
 
 
-class DaySelect(discord.ui.Select):
+class DayButton(discord.ui.Button):
     def __init__(self):
-        options = [
-            discord.SelectOption(
-                label=str(day),
-                value=str(day)
-            )
-            for day in range(1, 32)
-        ]
-
         super().__init__(
-            placeholder="Choose your birth day...",
-            options=options
+            label="Choose Day",
+            style=discord.ButtonStyle.secondary
         )
 
-    async def callback(self, interaction: discord.Interaction):
+    async def callback(
+        self,
+        interaction: discord.Interaction
+    ):
         view = self.view
 
         if interaction.user.id != view.member.id:
@@ -471,10 +468,60 @@ class DaySelect(discord.ui.Select):
             )
             return
 
-        view.selected_day = int(self.values[0])
+        await interaction.response.send_modal(
+            DayModal(view)
+        )
+
+
+class DayModal(
+    discord.ui.Modal,
+    title="Birthday Day"
+):
+    day = discord.ui.TextInput(
+        label="Birth day",
+        placeholder="Example: 15",
+        min_length=1,
+        max_length=2,
+        required=True
+    )
+
+    def __init__(self, birthday_view):
+        super().__init__()
+
+        self.birthday_view = birthday_view
+
+    async def on_submit(
+        self,
+        interaction: discord.Interaction
+    ):
+        if interaction.user.id != self.birthday_view.member.id:
+            await interaction.response.send_message(
+                "This isn't your onboarding!",
+                ephemeral=True
+            )
+            return
+
+        try:
+            day = int(self.day.value)
+        except ValueError:
+            await interaction.response.send_message(
+                "Please enter a number from 1 to 31.",
+                ephemeral=True
+            )
+            return
+
+        if day < 1 or day > 31:
+            await interaction.response.send_message(
+                "Please enter a number from 1 to 31.",
+                ephemeral=True
+            )
+            return
+
+        self.birthday_view.selected_day = day
+        self.birthday_view.day_button.label = f"Day: {day}"
 
         await interaction.response.edit_message(
-            view=view
+            view=self.birthday_view
         )
 
 
