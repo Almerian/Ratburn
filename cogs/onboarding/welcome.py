@@ -85,7 +85,6 @@ def build_onboarding_profile_embed(
         )
     )
 
-    # Birthday
     if profile["birthday_month"] and profile["birthday_day"]:
         birthday = (
             f"{calendar.month_name[profile['birthday_month']]} "
@@ -94,10 +93,8 @@ def build_onboarding_profile_embed(
     else:
         birthday = "Not provided"
 
-    # Nickname
     nickname = profile["nickname"] or member.display_name
 
-    # Pronouns
     pronouns = "they/them"
 
     if profile["pronouns"]:
@@ -112,7 +109,6 @@ def build_onboarding_profile_embed(
         except (json.JSONDecodeError, TypeError):
             pronouns = profile["pronouns"]
 
-    # Timezone
     timezone_name = profile["timezone"] or "Not provided"
 
     embed.add_field(
@@ -443,7 +439,11 @@ class MonthSelect(discord.ui.Select):
             )
             return
 
-        view.selected_month = int(self.values[0])
+        selected = self.values[0]
+        view.selected_month = int(selected)
+
+        for option in self.options:
+            option.default = option.value == selected
 
         await interaction.response.edit_message(
             view=view
@@ -762,6 +762,9 @@ class PronounSelect(discord.ui.Select):
             return
 
         selected = self.values[0]
+
+        for option in self.options:
+            option.default = option.value == selected
 
         if selected == "ask me":
             view.selected_pronouns = PRONOUN_OPTIONS["they/them"]
