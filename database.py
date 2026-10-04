@@ -465,6 +465,23 @@ class Database:
 
         self.connection.commit()
 
+        def get_demerit_count(
+        self,
+        guild_id: int,
+        user_id: int
+    ):
+        return self.connection.execute("""
+            SELECT COUNT(*)
+            FROM discipline
+            WHERE guild_id = ?
+            AND user_id = ?
+            AND action = 'demerit'
+            AND status = 'active'
+        """, (
+            guild_id,
+            user_id
+        )).fetchone()[0]
+
 #==================================DO NOT REMOVE==================================
     def clear_discipline_records(
         self,
