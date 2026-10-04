@@ -1220,20 +1220,29 @@ class OnboardingCompleteView(discord.ui.View):
         self,
         interaction: discord.Interaction
     ):
+        print("EDIT PROFILE: callback started")
+    
         if not await self.check_user(interaction):
+            print("EDIT PROFILE: user check failed")
             return
-
+    
+        print("EDIT PROFILE: user check passed")
+    
         view = EditProfileView(
             self.bot,
             self.member,
             self
         )
-
+    
+        print("EDIT PROFILE: view created")
+    
         await interaction.response.edit_message(
             content="**What would you like to change?**",
             embed=None,
             view=view
         )
+    
+        print("EDIT PROFILE: message edited")
 
     async def on_timeout(self):
         for item in self.children:
