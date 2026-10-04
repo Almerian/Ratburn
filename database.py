@@ -465,7 +465,7 @@ class Database:
 
         self.connection.commit()
 
-        def get_demerit_count(
+    def get_demerit_count(
         self,
         guild_id: int,
         user_id: int
