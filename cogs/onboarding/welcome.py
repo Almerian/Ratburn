@@ -191,8 +191,10 @@ class WelcomeView(discord.ui.View):
         interaction: discord.Interaction,
         button: discord.ui.Button
     ):
+        await interaction.response.defer()
+
         if interaction.user.id != self.member.id:
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 "This isn't your onboarding!",
                 ephemeral=True
             )
@@ -212,7 +214,7 @@ class WelcomeView(discord.ui.View):
             "birthday"
         )
 
-        await interaction.response.edit_message(
+        await interaction.edit_original_response(
             content=(
                 "Excellent. Let's get a few things sorted out.\n\n"
                 "First, when is your birthday?"
