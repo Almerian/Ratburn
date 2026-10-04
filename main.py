@@ -43,6 +43,7 @@ class Ratburn(commands.Bot):
         await self.load_extension("cogs.configuration")
         await self.load_extension("cogs.rat_trap")
         await self.load_extension("cogs.onboarding")
+        await self.load_extension("cogs.profile")
         await self.load_extension("cogs.birthdays")
         await self.load_extension("cogs.events")
         await self.load_extension("cogs.daily_quiz")
