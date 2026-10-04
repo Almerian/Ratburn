@@ -1,7 +1,6 @@
 import calendar
 import json
 from datetime import datetime, timedelta, timezone
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import discord
 from discord import app_commands
@@ -77,7 +76,8 @@ PRONOUN_OPTIONS = {
 
 def build_profile_embed(
     member: discord.Member,
-    profile
+    profile,
+    demerit_count: int
 ):
     embed = discord.Embed(
         title="🐀 Your Ratburn Profile",
@@ -145,15 +145,21 @@ def build_profile_embed(
     )
 
     embed.add_field(
-        name="📜 Rules",
-        value=rules,
+        name="🧠 Daily Quiz",
+        value=f"**{profile['quiz_points']}** points",
         inline=True
     )
 
     embed.add_field(
-        name="🧠 Daily Quiz",
-        value=f"**{profile['quiz_points']}** points",
+        name="⚠️ Demerits",
+        value=f"**{demerit_count}**",
         inline=True
+    )
+
+    embed.add_field(
+        name="📜 Rules",
+        value=rules,
+        inline=False
     )
 
     embed.set_footer(
@@ -175,6 +181,25 @@ def get_pronoun_display(pronouns):
                 f"{item['subject']}/{item['object']}"
                 for item in pronoun_sets
             )
+    except (json.JSONDecodeError, TypeError):
+        pass
+
+    return pronouns
+
+
+def get_pronoun_value(pronouns):
+    if not pronouns:
+        return "they/them"
+
+    try:
+        pronoun_sets = json.loads(pronouns)
+
+        if pronoun_sets == PRONOUN_OPTIONS["any pronouns"]:
+            return "any pronouns"
+
+        for name, option_sets in PRONOUN_OPTIONS.items():
+            if option_sets == pronoun_sets:
+                return name
     except (json.JSONDecodeError, TypeError):
         pass
 
@@ -402,7 +427,7 @@ class PronounSelect(discord.ui.Select):
             ),
         ]
 
-        current = get_pronoun_display(
+        current = get_pronoun_value(
             edit_view.pronouns
         )
 
@@ -468,6 +493,29 @@ class TimezoneSelect(discord.ui.Select):
         await self.edit_view.refresh(interaction)
 
 
+class RulesAcknowledgementButton(discord.ui.Button):
+    def __init__(self, edit_view):
+        super().__init__(
+            label="Acknowledge Rules",
+            emoji="📜",
+            style=discord.ButtonStyle.secondary,
+            row=2
+        )
+
+        self.edit_view = edit_view
+
+    async def callback(
+        self,
+        interaction: discord.Interaction
+    ):
+        if not await self.edit_view.check_user(interaction):
+            return
+
+        self.edit_view.rules_acknowledged = True
+
+        await self.edit_view.refresh(interaction)
+
+
 class ProfileEditView(discord.ui.View):
     def __init__(
         self,
@@ -488,6 +536,8 @@ class ProfileEditView(discord.ui.View):
         self.nickname = original_profile["nickname"]
         self.pronouns = original_profile["pronouns"]
         self.timezone = original_profile["timezone"]
+
+        self.rules_acknowledged = False
 
         self.add_item(
             PronounSelect(self)
@@ -514,6 +564,11 @@ class ProfileEditView(discord.ui.View):
         )
         self.nickname_button.callback = self.edit_nickname
         self.add_item(self.nickname_button)
+
+        self.rules_button = RulesAcknowledgementButton(
+            self
+        )
+        self.add_item(self.rules_button)
 
         self.save_button = discord.ui.Button(
             label="Save Profile",
@@ -556,12 +611,20 @@ class ProfileEditView(discord.ui.View):
         ])
 
     def build_edit_embed(self):
+        rules_status = (
+            "✅ Rules acknowledged for this save."
+            if self.rules_acknowledged
+            else "⚠️ You must acknowledge the rules before saving."
+        )
+
         embed = discord.Embed(
             title="✏️ Edit Your Ratburn Profile",
             description=(
-                "Make any changes you'd like, then hit **Save Profile**.\n\n"
+                "Make any changes you'd like, then acknowledge the "
+                "rules and hit **Save Profile**.\n\n"
                 "Your weekly profile edit is only used when you save "
-                "an actual change."
+                "an actual change.\n\n"
+                f"{rules_status}"
             )
         )
 
@@ -628,6 +691,24 @@ class ProfileEditView(discord.ui.View):
             NicknameEditModal(self)
         )
 
+    def get_rules_message_url(self):
+        config = self.bot.database.get_config(
+            self.member.guild.id
+        )
+
+        channel_id = config["rules_channel_id"]
+        message_id = config["rules_message_id"]
+
+        if not channel_id or not message_id:
+            return None
+
+        return (
+            f"https://discord.com/channels/"
+            f"{self.member.guild.id}/"
+            f"{channel_id}/"
+            f"{message_id}"
+        )
+
     async def save_profile(
         self,
         interaction: discord.Interaction
@@ -635,12 +716,53 @@ class ProfileEditView(discord.ui.View):
         if not await self.check_user(interaction):
             return
 
-        if not self.has_changes():
+        if not self.rules_acknowledged:
             await interaction.response.send_message(
-                "Nothing has changed, so your weekly profile edit "
-                "wasn't used.",
+                "Please acknowledge the server rules before saving "
+                "your profile.",
                 ephemeral=True
             )
+            return
+
+        has_changes = self.has_changes()
+
+        now = datetime.now(timezone.utc)
+
+        if not has_changes:
+            self.bot.database.set_member_profile(
+                self.member.guild.id,
+                self.member.id,
+                "rules_acknowledged",
+                1
+            )
+
+            self.bot.database.set_member_profile(
+                self.member.guild.id,
+                self.member.id,
+                "rules_acknowledged_at",
+                now.isoformat()
+            )
+
+            profile = self.bot.database.get_member_profile(
+                self.member.guild.id,
+                self.member.id
+            )
+
+            demerit_count = self.bot.database.get_demerit_count(
+                self.member.guild.id,
+                self.member.id
+            )
+
+            await interaction.response.edit_message(
+                embed=build_profile_embed(
+                    self.member,
+                    profile,
+                    demerit_count
+                ),
+                view=None
+            )
+
+            self.stop()
             return
 
         last_edited = parse_timestamp(
@@ -649,8 +771,6 @@ class ProfileEditView(discord.ui.View):
                 self.member.id
             )
         )
-
-        now = datetime.now(timezone.utc)
 
         if last_edited is not None:
             if last_edited.tzinfo is None:
@@ -732,6 +852,20 @@ class ProfileEditView(discord.ui.View):
             self.timezone
         )
 
+        self.bot.database.set_member_profile(
+            guild_id,
+            user_id,
+            "rules_acknowledged",
+            1
+        )
+
+        self.bot.database.set_member_profile(
+            guild_id,
+            user_id,
+            "rules_acknowledged_at",
+            now.isoformat()
+        )
+
         self.bot.database.set_profile_last_edited(
             guild_id,
             user_id,
@@ -754,9 +888,15 @@ class ProfileEditView(discord.ui.View):
             user_id
         )
 
+        demerit_count = self.bot.database.get_demerit_count(
+            guild_id,
+            user_id
+        )
+
         embed = build_profile_embed(
             self.member,
-            profile
+            profile,
+            demerit_count
         )
 
         await interaction.edit_original_response(
@@ -778,10 +918,16 @@ class ProfileEditView(discord.ui.View):
             self.member.id
         )
 
+        demerit_count = self.bot.database.get_demerit_count(
+            self.member.guild.id,
+            self.member.id
+        )
+
         await interaction.response.edit_message(
             embed=build_profile_embed(
                 self.member,
-                profile
+                profile,
+                demerit_count
             ),
             view=None
         )
@@ -817,9 +963,15 @@ class Profile(commands.Cog):
             interaction.user.id
         )
 
+        demerit_count = self.bot.database.get_demerit_count(
+            interaction.guild.id,
+            interaction.user.id
+        )
+
         embed = build_profile_embed(
             interaction.user,
-            profile
+            profile,
+            demerit_count
         )
 
         view = ProfileView(
@@ -920,6 +1072,19 @@ class ProfileView(discord.ui.View):
             self.member,
             profile
         )
+
+        rules_url = view.get_rules_message_url()
+
+        if rules_url:
+            view.rules_read_button = discord.ui.Button(
+                label="Read Rules",
+                emoji="📖",
+                style=discord.ButtonStyle.link,
+                url=rules_url,
+                row=2
+            )
+
+            view.add_item(view.rules_read_button)
 
         await interaction.response.edit_message(
             embed=view.build_edit_embed(),
