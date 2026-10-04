@@ -1,7 +1,6 @@
 import html
 import logging
 import random
-import sqlite3
 
 import aiohttp
 import discord
@@ -57,14 +56,16 @@ class QuizButton(discord.ui.Button):
             self.quiz_view.bot.database.record_quiz_answer(
                 guild.id,
                 interaction.user.id,
-                quiz_date,
-                self.correct
+                quiz_date
             )
-        except sqlite3.IntegrityError:
+        except Exception:
             await interaction.response.send_message(
-                "You've already answered today's quiz! "
-                "Come back tomorrow for the next one. 🐀",
+                "Something went wrong recording your quiz answer.",
                 ephemeral=True
+            )
+            logger.exception(
+                "Failed recording quiz answer in guild %s.",
+                guild.id
             )
             return
 
