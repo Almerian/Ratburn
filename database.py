@@ -82,6 +82,10 @@ class Database:
                 onboarding_step TEXT,
                 onboarding_completed_at TEXT,
 
+                quiz_points INTEGER NOT NULL DEFAULT 0,
+                quiz_questions_answered INTEGER NOT NULL DEFAULT 0,
+                quiz_last_answered TEXT,
+
                 PRIMARY KEY (guild_id, user_id)
             )
         """)
@@ -106,6 +110,9 @@ class Database:
             "onboarding_message_id": "INTEGER",
             "onboarding_step": "TEXT",
             "onboarding_completed_at": "TEXT",
+            "quiz_points": "INTEGER NOT NULL DEFAULT 0",
+            "quiz_questions_answered": "INTEGER NOT NULL DEFAULT 0",
+            "quiz_last_answered": "TEXT",
         }
 
         for column, column_type in new_member_columns.items():
@@ -183,28 +190,102 @@ class Database:
                     f"{column} {column_type}"
                 )
 
-        self.connection.execute("""
-            CREATE TABLE IF NOT EXISTS quiz_scores (
-                guild_id INTEGER NOT NULL,
-                user_id INTEGER NOT NULL,
-                points INTEGER NOT NULL DEFAULT 0,
-
-                PRIMARY KEY (guild_id, user_id)
-            )
-        """)
-
-        self.connection.execute("""
-            CREATE TABLE IF NOT EXISTS quiz_answers (
-                guild_id INTEGER NOT NULL,
-                user_id INTEGER NOT NULL,
-                quiz_date TEXT NOT NULL,
-                correct INTEGER NOT NULL,
-
-                PRIMARY KEY (guild_id, user_id, quiz_date)
-            )
-        """)
+        self.migrate_quiz_tables()
 
         self.connection.commit()
+
+    def migrate_quiz_tables(self):
+        quiz_scores_exists = self.connection.execute("""
+            SELECT 1
+            FROM sqlite_master
+            WHERE type = 'table'
+            AND name = 'quiz_scores'
+        """).fetchone()
+
+        quiz_answers_exists = self.connection.execute("""
+            SELECT 1
+            FROM sqlite_master
+            WHERE type = 'table'
+            AND name = 'quiz_answers'
+        """).fetchone()
+
+        if quiz_scores_exists:
+            self.connection.execute("""
+                INSERT OR IGNORE INTO member_profiles (
+                    guild_id,
+                    user_id
+                )
+                SELECT guild_id, user_id
+                FROM quiz_scores
+            """)
+
+            self.connection.execute("""
+                UPDATE member_profiles
+                SET quiz_points = (
+                    SELECT points
+                    FROM quiz_scores
+                    WHERE quiz_scores.guild_id = member_profiles.guild_id
+                    AND quiz_scores.user_id = member_profiles.user_id
+                )
+                WHERE EXISTS (
+                    SELECT 1
+                    FROM quiz_scores
+                    WHERE quiz_scores.guild_id = member_profiles.guild_id
+                    AND quiz_scores.user_id = member_profiles.user_id
+                )
+            """)
+
+        if quiz_answers_exists:
+            self.connection.execute("""
+                INSERT OR IGNORE INTO member_profiles (
+                    guild_id,
+                    user_id
+                )
+                SELECT guild_id, user_id
+                FROM quiz_answers
+            """)
+
+            self.connection.execute("""
+                UPDATE member_profiles
+                SET quiz_questions_answered = (
+                    SELECT COUNT(*)
+                    FROM quiz_answers
+                    WHERE quiz_answers.guild_id = member_profiles.guild_id
+                    AND quiz_answers.user_id = member_profiles.user_id
+                )
+                WHERE EXISTS (
+                    SELECT 1
+                    FROM quiz_answers
+                    WHERE quiz_answers.guild_id = member_profiles.guild_id
+                    AND quiz_answers.user_id = member_profiles.user_id
+                )
+            """)
+
+            self.connection.execute("""
+                UPDATE member_profiles
+                SET quiz_last_answered = (
+                    SELECT MAX(quiz_date)
+                    FROM quiz_answers
+                    WHERE quiz_answers.guild_id = member_profiles.guild_id
+                    AND quiz_answers.user_id = member_profiles.user_id
+                )
+                WHERE EXISTS (
+                    SELECT 1
+                    FROM quiz_answers
+                    WHERE quiz_answers.guild_id = member_profiles.guild_id
+                    AND quiz_answers.user_id = member_profiles.user_id
+                )
+            """)
+
+        if quiz_answers_exists:
+            self.connection.execute("""
+                DROP TABLE quiz_answers
+            """)
+
+        if quiz_scores_exists:
+            self.connection.execute("""
+                DROP TABLE quiz_scores
+            """)
 
     def ensure_guild(self, guild_id: int):
         self.connection.execute("""
@@ -533,36 +614,28 @@ class Database:
         guild_id: int,
         user_id: int
     ):
-        row = self.connection.execute("""
-            SELECT points
-            FROM quiz_scores
-            WHERE guild_id = ?
-            AND user_id = ?
-        """, (
+        profile = self.get_member_profile(
             guild_id,
             user_id
-        )).fetchone()
+        )
 
-        if row is None:
-            return 0
-
-        return row["points"]
+        return profile["quiz_points"]
 
     def add_quiz_point(
         self,
         guild_id: int,
         user_id: int
     ):
+        self.ensure_member(
+            guild_id,
+            user_id
+        )
+
         self.connection.execute("""
-            INSERT INTO quiz_scores (
-                guild_id,
-                user_id,
-                points
-            )
-            VALUES (?, ?, 1)
-            ON CONFLICT(guild_id, user_id)
-            DO UPDATE SET
-                points = points + 1
+            UPDATE member_profiles
+            SET quiz_points = quiz_points + 1
+            WHERE guild_id = ?
+            AND user_id = ?
         """, (
             guild_id,
             user_id
@@ -576,19 +649,12 @@ class Database:
         user_id: int,
         quiz_date: str
     ):
-        row = self.connection.execute("""
-            SELECT 1
-            FROM quiz_answers
-            WHERE guild_id = ?
-            AND user_id = ?
-            AND quiz_date = ?
-        """, (
+        profile = self.get_member_profile(
             guild_id,
-            user_id,
-            quiz_date
-        )).fetchone()
+            user_id
+        )
 
-        return row is not None
+        return profile["quiz_last_answered"] == quiz_date
 
     def record_quiz_answer(
         self,
@@ -597,20 +663,34 @@ class Database:
         quiz_date: str,
         correct: bool
     ):
-        self.connection.execute("""
-            INSERT INTO quiz_answers (
-                guild_id,
-                user_id,
-                quiz_date,
-                correct
+        self.ensure_member(
+            guild_id,
+            user_id
+        )
+
+        cursor = self.connection.execute("""
+            UPDATE member_profiles
+            SET
+                quiz_questions_answered =
+                    quiz_questions_answered + 1,
+                quiz_last_answered = ?
+            WHERE guild_id = ?
+            AND user_id = ?
+            AND (
+                quiz_last_answered IS NULL
+                OR quiz_last_answered != ?
             )
-            VALUES (?, ?, ?, ?)
         """, (
+            quiz_date,
             guild_id,
             user_id,
-            quiz_date,
-            int(correct)
+            quiz_date
         ))
+
+        if cursor.rowcount == 0:
+            raise sqlite3.IntegrityError(
+                "Quiz answer already recorded for this date."
+            )
 
         self.connection.commit()
 
