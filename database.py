@@ -446,6 +446,24 @@ class Database:
             user_id
         )).fetchone()
 
+    def get_birthdays(
+        self,
+        guild_id: int,
+        month: int,
+        day: int
+    ):
+        return self.connection.execute("""
+            SELECT *
+            FROM member_profiles
+            WHERE guild_id = ?
+            AND birthday_month = ?
+            AND birthday_day = ?
+        """, (
+            guild_id,
+            month,
+            day
+        )).fetchall()
+
     def set_member_profile(
         self,
         guild_id: int,
