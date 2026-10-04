@@ -115,23 +115,35 @@ class Events(commands.Cog):
         timezone: ZoneInfo
     ):
         start_time = event.start_time.astimezone(timezone)
-
         server_time = start_time.strftime("%I:%M %p").lstrip("0")
         discord_timestamp = int(event.start_time.timestamp())
 
-        message = (
-            "📅 **Event Reminder!**\n"
-            f"**{event.name}** is happening tomorrow at "
-            f"**{server_time}!**\n\n"
-            f"Or, **<t:{discord_timestamp}:t> for you!**\n"
-            "Don't forget to join us!"
+        embed = discord.Embed(
+            title="📅 Event Reminder!",
+            description=(
+                f"**{event.name}** is happening tomorrow at "
+                f"**{server_time}!**\n\n"
+                f"Or, **<t:{discord_timestamp}:t> for you!**\n\n"
+                "Don't forget to join us!"
+            ),
+            color=discord.Color.from_rgb(66, 135, 245)
         )
 
         if event.url:
-            message += f"\n\n{event.url}"
+            embed.add_field(
+                name="🔗 Event Link",
+                value=event.url,
+                inline=False
+            )
+
+        embed.set_footer(
+            text="Ratburn's Event Department 🐀"
+        )
 
         try:
-            await event_channel.send(message)
+            await event_channel.send(
+                embed=embed
+            )
             return True
         except discord.Forbidden:
             logger.error(
@@ -151,17 +163,30 @@ class Events(commands.Cog):
         event: discord.ScheduledEvent,
         event_channel: discord.TextChannel
     ):
-        message = (
-            "🚨 **It's time!**\n\n"
-            f"**{event.name}** is starting now!\n\n"
-            "Come on in!"
+        embed = discord.Embed(
+            title="🚨 It's Time!",
+            description=(
+                f"**{event.name}** is starting now!\n\n"
+                "Come on in!"
+            ),
+            color=discord.Color.from_rgb(220, 53, 69)
         )
 
         if event.url:
-            message += f"\n\n{event.url}"
+            embed.add_field(
+                name="🔗 Event Link",
+                value=event.url,
+                inline=False
+            )
+
+        embed.set_footer(
+            text="Ratburn's Event Department 🐀"
+        )
 
         try:
-            await event_channel.send(message)
+            await event_channel.send(
+                embed=embed
+            )
             return True
         except discord.Forbidden:
             logger.error(
