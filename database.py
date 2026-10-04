@@ -86,6 +86,8 @@ class Database:
                 quiz_questions_answered INTEGER NOT NULL DEFAULT 0,
                 quiz_last_answered TEXT,
 
+                profile_last_edited TEXT,
+
                 PRIMARY KEY (guild_id, user_id)
             )
         """)
@@ -113,6 +115,7 @@ class Database:
             "quiz_points": "INTEGER NOT NULL DEFAULT 0",
             "quiz_questions_answered": "INTEGER NOT NULL DEFAULT 0",
             "quiz_last_answered": "TEXT",
+            "profile_last_edited": "TEXT",
         }
 
         for column, column_type in new_member_columns.items():
@@ -606,6 +609,42 @@ class Database:
             """,
             (value, guild_id, user_id)
         )
+
+        self.connection.commit()
+
+    def get_profile_last_edited(
+        self,
+        guild_id: int,
+        user_id: int
+    ):
+        profile = self.get_member_profile(
+            guild_id,
+            user_id
+        )
+
+        return profile["profile_last_edited"]
+
+    def set_profile_last_edited(
+        self,
+        guild_id: int,
+        user_id: int,
+        timestamp: str
+    ):
+        self.ensure_member(
+            guild_id,
+            user_id
+        )
+
+        self.connection.execute("""
+            UPDATE member_profiles
+            SET profile_last_edited = ?
+            WHERE guild_id = ?
+            AND user_id = ?
+        """, (
+            timestamp,
+            guild_id,
+            user_id
+        ))
 
         self.connection.commit()
 
