@@ -5,6 +5,8 @@ from datetime import datetime, timezone
 import discord
 from discord.ext import commands
 
+from cogs.profile.profile import build_profile_embed
+
 
 TIMEZONE_OPTIONS = [
     ("UTC-12:00", "International Date Line West", "Etc/GMT+12"),
@@ -73,81 +75,6 @@ PRONOUN_OPTIONS = {
 }
 
 
-def build_onboarding_profile_embed(
-    member: discord.Member,
-    profile
-):
-    embed = discord.Embed(
-        title="🐀 All settled in!",
-        description=(
-            f"{member.mention} has finished getting situated "
-            "and is ready to go!"
-        )
-    )
-
-    if profile["birthday_month"] and profile["birthday_day"]:
-        birthday = (
-            f"{calendar.month_name[profile['birthday_month']]} "
-            f"{profile['birthday_day']}"
-        )
-    else:
-        birthday = "Not provided"
-
-    nickname = profile["nickname"] or member.display_name
-
-    pronouns = "they/them"
-
-    if profile["pronouns"]:
-        try:
-            pronoun_sets = json.loads(profile["pronouns"])
-
-            if pronoun_sets:
-                pronouns = " • ".join(
-                    f"{item['subject']}/{item['object']}"
-                    for item in pronoun_sets
-                )
-        except (json.JSONDecodeError, TypeError):
-            pronouns = profile["pronouns"]
-
-    timezone_name = profile["timezone"] or "Not provided"
-
-    embed.add_field(
-        name="🎂 Birthday",
-        value=birthday,
-        inline=True
-    )
-
-    embed.add_field(
-        name="🏷️ Nickname",
-        value=nickname,
-        inline=True
-    )
-
-    embed.add_field(
-        name="💬 Pronouns",
-        value=pronouns,
-        inline=True
-    )
-
-    embed.add_field(
-        name="🌎 Timezone",
-        value=timezone_name,
-        inline=True
-    )
-
-    embed.add_field(
-        name="📜 Rules",
-        value="✅ Acknowledged",
-        inline=True
-    )
-
-    embed.set_footer(
-        text="Welcome aboard! Please enjoy your stay."
-    )
-
-    return embed
-
-
 async def return_to_profile(
     interaction: discord.Interaction,
     bot,
@@ -159,7 +86,7 @@ async def return_to_profile(
         member.id
     )
 
-    embed = build_onboarding_profile_embed(
+    embed = build_profile_embed(
         member,
         profile
     )
@@ -1207,188 +1134,6 @@ class OnboardingCompleteView(discord.ui.View):
 
         return True
 
-    @discord.ui.button(
-        label="Edit Profile",
-        emoji="✏️",
-        style=discord.ButtonStyle.secondary
-    )
-    async def edit_profile(
-        self,
-        interaction: discord.Interaction,
-        button: discord.ui.Button
-    ):
-        if not await self.check_user(interaction):
-            return
-
-        view = EditProfileView(
-            self.bot,
-            self.member,
-            self
-        )
-
-        await interaction.response.edit_message(
-            content="**What would you like to change?**",
-            embed=None,
-            view=view
-        )
-
-    async def on_timeout(self):
-        for item in self.children:
-            item.disabled = True
-
-        if self.message:
-            try:
-                await self.message.edit(
-                    view=self
-                )
-            except discord.HTTPException:
-                pass
-
-
-class EditProfileView(discord.ui.View):
-    def __init__(
-        self,
-        bot,
-        member: discord.Member,
-        profile_view: OnboardingCompleteView
-    ):
-        super().__init__(timeout=600)
-
-        self.bot = bot
-        self.member = member
-        self.profile_view = profile_view
-
-        self.add_item(EditProfileSelect())
-
-    async def check_user(
-        self,
-        interaction: discord.Interaction
-    ):
-        if interaction.user.id != self.member.id:
-            await interaction.response.send_message(
-                "This isn't your onboarding!",
-                ephemeral=True
-            )
-            return False
-
-        return True
-
-    @discord.ui.button(
-        label="Done",
-        emoji="✅",
-        style=discord.ButtonStyle.success
-    )
-    async def done(
-        self,
-        interaction: discord.Interaction,
-        button: discord.ui.Button
-    ):
-        if not await self.check_user(interaction):
-            return
-
-        await return_to_profile(
-            interaction,
-            self.bot,
-            self.member,
-            self.profile_view
-        )
-
-
-class EditProfileSelect(discord.ui.Select):
-    def __init__(self):
-        options = [
-            discord.SelectOption(
-                label="Birthday",
-                emoji="🎂",
-                value="birthday"
-            ),
-            discord.SelectOption(
-                label="Pronouns",
-                emoji="💬",
-                value="pronouns"
-            ),
-            discord.SelectOption(
-                label="Nickname",
-                emoji="🏷️",
-                value="nickname"
-            ),
-            discord.SelectOption(
-                label="Timezone",
-                emoji="🌎",
-                value="timezone"
-            ),
-        ]
-
-        super().__init__(
-            placeholder="Choose something to edit...",
-            options=options
-        )
-
-    async def callback(
-        self,
-        interaction: discord.Interaction
-    ):
-        view = self.view
-
-        if interaction.user.id != view.member.id:
-            await interaction.response.send_message(
-                "This isn't your onboarding!",
-                ephemeral=True
-            )
-            return
-
-        choice = self.values[0]
-
-        if choice == "birthday":
-            await interaction.response.edit_message(
-                content=(
-                    "**Let's update your birthday!**\n\n"
-                    "Choose your month and day below."
-                ),
-                embed=None,
-                view=BirthdayView(
-                    view.bot,
-                    view.member,
-                    view.profile_view
-                )
-            )
-            return
-
-        if choice == "pronouns":
-            await interaction.response.edit_message(
-                content="**Let's update your pronouns!**",
-                embed=None,
-                view=PronounView(
-                    view.bot,
-                    view.member,
-                    view.profile_view
-                )
-            )
-            return
-
-        if choice == "nickname":
-            await interaction.response.edit_message(
-                content="**Let's update your nickname!**",
-                embed=None,
-                view=NicknameView(
-                    view.bot,
-                    view.member,
-                    view.profile_view
-                )
-            )
-            return
-
-        if choice == "timezone":
-            await interaction.response.edit_message(
-                content="**Let's update your timezone!**",
-                embed=None,
-                view=TimezoneView(
-                    view.bot,
-                    view.member,
-                    view.profile_view
-                )
-            )
-
 
 class RulesView(discord.ui.View):
     def __init__(
@@ -1512,7 +1257,7 @@ class RulesView(discord.ui.View):
             self.member
         )
 
-        embed = build_onboarding_profile_embed(
+        embed = build_profile_embed(
             self.member,
             profile
         )
