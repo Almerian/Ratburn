@@ -55,10 +55,7 @@ class Events(commands.Cog):
             now = datetime.now(timezone)
 
             for event in guild.scheduled_events:
-                if event.status in (
-                    discord.ScheduledEventStatus.cancelled,
-                    discord.ScheduledEventStatus.completed
-                ):
+                if event.status.name in ("cancelled", "completed"):
                     continue
 
                 await self.check_event(
