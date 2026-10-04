@@ -21,7 +21,7 @@ class Birthdays(commands.Cog):
     @tasks.loop(minutes=1)
     async def birthday_loop(self):
         for guild in self.bot.guilds:
-            config = self.bot.database.get_guild_config(guild.id)
+            config = self.bot.database.get_config(guild.id)
 
             if not config:
                 continue
@@ -60,7 +60,7 @@ class Birthdays(commands.Cog):
         guild: discord.Guild,
         now: datetime
     ):
-        config = self.bot.database.get_guild_config(guild.id)
+        config = self.bot.database.get_config(guild.id)
 
         birthday_channel_id = config["birthday_channel_id"]
 
