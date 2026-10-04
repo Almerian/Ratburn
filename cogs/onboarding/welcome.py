@@ -1188,7 +1188,7 @@ class OnboardingCompleteView(discord.ui.View):
         bot,
         member: discord.Member
     ):
-        super().__init__(timeout=600)
+        super().__init__(timeout=None)
 
         self.bot = bot
         self.member = member
