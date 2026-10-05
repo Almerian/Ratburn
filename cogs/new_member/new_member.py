@@ -47,6 +47,39 @@ class NewMember(commands.Cog):
 
         return role
 
+        async def remove_new_member_role(
+            self,
+            member: discord.Member
+        ):
+            role = discord.utils.get(
+                member.guild.roles,
+                name="✨ New Member"
+            )
+    
+            if role is None:
+                return
+    
+            if role not in member.roles:
+                return
+    
+            try:
+                await member.remove_roles(
+                    role,
+                    reason="Rules acknowledged"
+                )
+            except discord.Forbidden:
+                logger.error(
+                    "Could not remove New Member role from %s in guild %s.",
+                    member.id,
+                    member.guild.id
+                )
+            except discord.HTTPException:
+                logger.exception(
+                    "Failed removing New Member role from %s in guild %s.",
+                    member.id,
+                    member.guild.id
+                )
+
     async def configure_channel_permissions(
         self,
         guild: discord.Guild
@@ -63,18 +96,6 @@ class NewMember(commands.Cog):
 
         welcome_channel_id = config["welcome_channel_id"]
         rat_trap_channel_id = config["rat_trap_channel_id"]
-
-        welcome_channel = (
-            guild.get_channel(welcome_channel_id)
-            if welcome_channel_id
-            else None
-        )
-
-        rat_trap_channel = (
-            guild.get_channel(rat_trap_channel_id)
-            if rat_trap_channel_id
-            else None
-        )
 
         staff_role = (
             guild.get_role(config["staff_role_id"])
@@ -131,6 +152,36 @@ class NewMember(commands.Cog):
     async def on_ready(self):
         for guild in self.bot.guilds:
             await self.configure_channel_permissions(guild)
+
+    @commands.Cog.listener()
+    async def on_member_join(
+        self,
+        member: discord.Member
+    ):
+        role = await self.ensure_new_member_role(
+            member.guild
+        )
+
+        if role is None:
+            return
+
+        try:
+            await member.add_roles(
+                role,
+                reason="New member onboarding"
+            )
+        except discord.Forbidden:
+            logger.error(
+                "Could not give New Member role to %s in guild %s.",
+                member.id,
+                member.guild.id
+            )
+        except discord.HTTPException:
+            logger.exception(
+                "Failed giving New Member role to %s in guild %s.",
+                member.id,
+                member.guild.id
+            )
 
 
 async def setup(bot):
