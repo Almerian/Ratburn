@@ -1029,6 +1029,13 @@ class RatTrapChannelView(discord.ui.View):
             select.selected_channel_id
         )
 
+        new_member = self.bot.get_cog("NewMember")
+
+        if new_member is not None:
+            await new_member.configure_channel_permissions(
+                interaction.guild
+            )
+
         view = ConfigView(
             self.bot,
             self.guild_id
@@ -1154,6 +1161,13 @@ class WelcomeChannelSelect(discord.ui.ChannelSelect):
             "welcome_channel_id",
             channel.id
         )
+
+        new_member = self.bot.get_cog("NewMember")
+
+        if new_member is not None:
+            await new_member.configure_channel_permissions(
+                interaction.guild
+            )
 
         view = ConfigView(
             self.bot,
