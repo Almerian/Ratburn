@@ -1227,6 +1227,13 @@ class RulesView(discord.ui.View):
             now
         )
 
+        new_member = self.bot.get_cog("NewMember")
+
+        if new_member is not None:
+            await new_member.remove_new_member_role(
+                self.member
+            )
+
         profile = self.bot.database.get_member_profile(
             self.member.guild.id,
             self.member.id
