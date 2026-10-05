@@ -47,10 +47,90 @@ class NewMember(commands.Cog):
 
         return role
 
+    async def configure_channel_permissions(
+        self,
+        guild: discord.Guild
+    ):
+        role = await self.ensure_new_member_role(guild)
+
+        if role is None:
+            return
+
+        config = self.bot.database.get_config(guild.id)
+
+        if config is None:
+            return
+
+        welcome_channel_id = config["welcome_channel_id"]
+        rat_trap_channel_id = config["rat_trap_channel_id"]
+
+        welcome_channel = (
+            guild.get_channel(welcome_channel_id)
+            if welcome_channel_id
+            else None
+        )
+
+        rat_trap_channel = (
+            guild.get_channel(rat_trap_channel_id)
+            if rat_trap_channel_id
+            else None
+        )
+
+        staff_role = (
+            guild.get_role(config["staff_role_id"])
+            if config["staff_role_id"]
+            else None
+        )
+
+        for channel in guild.channels:
+            try:
+                if channel.id == welcome_channel_id:
+                    await channel.set_permissions(
+                        role,
+                        view_channel=True
+                    )
+
+                    await channel.set_permissions(
+                        guild.default_role,
+                        send_messages=False
+                    )
+
+                    if staff_role is not None:
+                        await channel.set_permissions(
+                            staff_role,
+                            view_channel=True,
+                            send_messages=True
+                        )
+
+                    if guild.me is not None:
+                        await channel.set_permissions(
+                            guild.me,
+                            view_channel=True,
+                            send_messages=True
+                        )
+
+                elif channel.id == rat_trap_channel_id:
+                    await channel.set_permissions(
+                        role,
+                        view_channel=True
+                    )
+
+                else:
+                    await channel.set_permissions(
+                        role,
+                        view_channel=False
+                    )
+
+            except (
+                discord.Forbidden,
+                discord.HTTPException
+            ):
+                continue
+
     @commands.Cog.listener()
     async def on_ready(self):
         for guild in self.bot.guilds:
-            await self.ensure_new_member_role(guild)
+            await self.configure_channel_permissions(guild)
 
 
 async def setup(bot):
