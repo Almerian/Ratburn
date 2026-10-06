@@ -58,7 +58,8 @@ class QuizButton(discord.ui.Button):
             self.quiz_view.bot.database.record_quiz_answer(
                 guild.id,
                 interaction.user.id,
-                quiz_date
+                quiz_date,
+                self.correct
             )
         except Exception:
             await interaction.response.send_message(
