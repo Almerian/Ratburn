@@ -184,10 +184,9 @@ class DailyQuiz(commands.Cog):
             "difficulty": question["difficulty"],
         }
 
-    async def post_quiz(
+    async def daily_quiz(
         self,
-        guild: discord.Guild,
-        test: bool = False
+        guild: discord.Guild
     ):
         config = self.bot.database.get_config(guild.id)
 
@@ -265,11 +264,7 @@ class DailyQuiz(commands.Cog):
         random.shuffle(answers)
 
         embed = discord.Embed(
-            title=(
-                "🧠 Daily Quiz Test"
-                if test
-                else "🧠 Daily Quiz"
-            ),
+            title="🧠 Daily Quiz",
             description=question["question"],
             color=discord.Color.from_rgb(66, 135, 245)
         )
@@ -307,8 +302,7 @@ class DailyQuiz(commands.Cog):
             return False
 
         logger.info(
-            "Posted %s quiz in guild %s.",
-            "test" if test else "daily",
+            "Posted Daily Quiz in guild %s.",
             guild.id
         )
 
@@ -353,7 +347,7 @@ class DailyQuiz(commands.Cog):
             if self.last_posted_dates.get(guild.id) == quiz_date:
                 continue
 
-            success = await self.post_quiz(guild)
+            success = await self.daily_quiz(guild)
 
             if success:
                 self.last_posted_dates[guild.id] = quiz_date
@@ -382,9 +376,8 @@ class DailyQuiz(commands.Cog):
             ephemeral=True
         )
 
-        success = await self.post_quiz(
-            interaction.guild,
-            test=True
+        success = await self.daily_quiz(
+            interaction.guild
         )
 
         if not success:
