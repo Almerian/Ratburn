@@ -1,11 +1,13 @@
+import datetime
 import html
 import logging
 import random
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import aiohttp
 import discord
 from discord import app_commands
-from discord.ext import commands
+from discord.ext import commands, tasks
 
 
 logger = logging.getLogger("ratburn.daily_quiz")
@@ -137,6 +139,13 @@ class QuizView(discord.ui.View):
 class DailyQuiz(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        self.last_posted_dates = {}
+
+    async def cog_load(self):
+        self.daily_quiz_scheduler.start()
+
+    def cog_unload(self):
+        self.daily_quiz_scheduler.cancel()
 
     async def fetch_question(self):
         url = "https://opentdb.com/api.php?amount=1&type=multiple"
@@ -174,77 +183,72 @@ class DailyQuiz(commands.Cog):
             "difficulty": question["difficulty"],
         }
 
-    @app_commands.command(
-        name="quiz_test",
-        description="Test the Daily Quiz."
-    )
-    @app_commands.default_permissions(administrator=True)
-    async def quiz_test(
+    async def post_quiz(
         self,
-        interaction: discord.Interaction
+        guild: discord.Guild,
+        test: bool = False
     ):
-        config = self.bot.database.get_config(interaction.guild.id)
+        config = self.bot.database.get_config(guild.id)
 
         if not config:
-            await interaction.response.send_message(
-                "Ratburn couldn't load this server's configuration.",
-                ephemeral=True
+            logger.warning(
+                "Could not load configuration for guild %s.",
+                guild.id
             )
-            return
+            return False
 
         event_channel_id = config["event_channel_id"]
 
         if not event_channel_id:
-            await interaction.response.send_message(
-                "No Event Channel is configured.",
-                ephemeral=True
+            logger.warning(
+                "No Event Channel configured for guild %s.",
+                guild.id
             )
-            return
+            return False
 
-        event_channel = interaction.guild.get_channel(
+        event_channel = guild.get_channel(
             event_channel_id
         )
 
         if event_channel is None:
-            await interaction.response.send_message(
-                "The configured Event Channel could not be found.",
-                ephemeral=True
+            logger.warning(
+                "Configured Event Channel could not be found "
+                "in guild %s.",
+                guild.id
             )
-            return
+            return False
 
         timezone_name = config["timezone"]
 
         if not timezone_name:
-            await interaction.response.send_message(
-                "No server timezone is configured.",
-                ephemeral=True
+            logger.warning(
+                "No timezone configured for guild %s.",
+                guild.id
             )
-            return
-
-        await interaction.response.defer(ephemeral=True)
-
-        question = await self.fetch_question()
-
-        if question is None:
-            await interaction.followup.send(
-                "I couldn't get a question from OpenTDB.",
-                ephemeral=True
-            )
-            return
-
-        import datetime
-        from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+            return False
 
         try:
             timezone = ZoneInfo(timezone_name)
         except ZoneInfoNotFoundError:
-            await interaction.followup.send(
-                "The server's configured timezone is invalid.",
-                ephemeral=True
+            logger.error(
+                "Invalid timezone '%s' configured for guild %s.",
+                timezone_name,
+                guild.id
             )
-            return
+            return False
 
-        quiz_date = datetime.datetime.now(timezone).date().isoformat()
+        question = await self.fetch_question()
+
+        if question is None:
+            logger.warning(
+                "Could not fetch a quiz question for guild %s.",
+                guild.id
+            )
+            return False
+
+        quiz_date = datetime.datetime.now(
+            timezone
+        ).date().isoformat()
 
         answers = [
             (
@@ -260,7 +264,11 @@ class DailyQuiz(commands.Cog):
         random.shuffle(answers)
 
         embed = discord.Embed(
-            title="🧠 Daily Quiz Test",
+            title=(
+                "🧠 Daily Quiz Test"
+                if test
+                else "🧠 Daily Quiz"
+            ),
             description=question["question"],
             color=discord.Color.from_rgb(66, 135, 245)
         )
@@ -285,21 +293,115 @@ class DailyQuiz(commands.Cog):
             )
             view.message = message
         except discord.Forbidden:
-            await interaction.followup.send(
-                "I don't have permission to post in the Event Channel.",
-                ephemeral=True
+            logger.error(
+                "No permission to post Daily Quiz in guild %s.",
+                guild.id
             )
-            return
+            return False
         except discord.HTTPException:
             logger.exception(
-                "Failed posting Daily Quiz test in guild %s.",
-                interaction.guild.id
+                "Failed posting Daily Quiz in guild %s.",
+                guild.id
             )
-            await interaction.followup.send(
-                "Something went wrong while posting the test question.",
+            return False
+
+        logger.info(
+            "Posted %s quiz in guild %s.",
+            "test" if test else "daily",
+            guild.id
+        )
+
+        return True
+
+    @tasks.loop(seconds=60)
+    async def daily_quiz_scheduler(self):
+        now_utc = datetime.datetime.now(
+            datetime.timezone.utc
+        )
+
+        for guild in self.bot.guilds:
+            config = self.bot.database.get_config(guild.id)
+
+            if not config:
+                continue
+
+            timezone_name = config["timezone"]
+
+            if not timezone_name:
+                continue
+
+            try:
+                timezone = ZoneInfo(timezone_name)
+            except ZoneInfoNotFoundError:
+                logger.error(
+                    "Invalid timezone '%s' configured for guild %s.",
+                    timezone_name,
+                    guild.id
+                )
+                continue
+
+            local_now = now_utc.astimezone(timezone)
+            quiz_date = local_now.date().isoformat()
+
+            if local_now.hour != 10:
+                continue
+
+            if local_now.minute != 0:
+                continue
+
+            if self.last_posted_dates.get(guild.id) == quiz_date:
+                continue
+
+            success = await self.post_quiz(guild)
+
+            if success:
+                self.last_posted_dates[guild.id] = quiz_date
+
+    @daily_quiz_scheduler.before_loop
+    async def before_daily_quiz_scheduler(self):
+        await self.bot.wait_until_ready()
+
+    @app_commands.command(
+        name="quiz_test",
+        description="Test the Daily Quiz."
+    )
+    @app_commands.default_permissions(administrator=True)
+    async def quiz_test(
+        self,
+        interaction: discord.Interaction
+    ):
+        if interaction.guild is None:
+            await interaction.response.send_message(
+                "This command can only be used inside a server.",
                 ephemeral=True
             )
             return
+
+        await interaction.response.defer(
+            ephemeral=True
+        )
+
+        success = await self.post_quiz(
+            interaction.guild,
+            test=True
+        )
+
+        if not success:
+            await interaction.followup.send(
+                "I couldn't post the test question. "
+                "Check the server configuration and Ratburn's "
+                "permissions.",
+                ephemeral=True
+            )
+            return
+
+        config = self.bot.database.get_config(
+            interaction.guild.id
+        )
+
+        event_channel = interaction.guild.get_channel(
+            config["event_channel_id"]
+        )
 
         await interaction.followup.send(
             f"Test question posted in {event_channel.mention}.",
