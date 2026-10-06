@@ -47,38 +47,38 @@ class NewMember(commands.Cog):
 
         return role
 
-        async def remove_new_member_role(
-            self,
-            member: discord.Member
-        ):
-            role = discord.utils.get(
-                member.guild.roles,
-                name="✨ New Member"
+    async def remove_new_member_role(
+        self,
+        member: discord.Member
+    ):
+        role = discord.utils.get(
+            member.guild.roles,
+            name="✨ New Member"
+        )
+
+        if role is None:
+            return
+
+        if role not in member.roles:
+            return
+
+        try:
+            await member.remove_roles(
+                role,
+                reason="Rules acknowledged"
             )
-    
-            if role is None:
-                return
-    
-            if role not in member.roles:
-                return
-    
-            try:
-                await member.remove_roles(
-                    role,
-                    reason="Rules acknowledged"
-                )
-            except discord.Forbidden:
-                logger.error(
-                    "Could not remove New Member role from %s in guild %s.",
-                    member.id,
-                    member.guild.id
-                )
-            except discord.HTTPException:
-                logger.exception(
-                    "Failed removing New Member role from %s in guild %s.",
-                    member.id,
-                    member.guild.id
-                )
+        except discord.Forbidden:
+            logger.error(
+                "Could not remove New Member role from %s in guild %s.",
+                member.id,
+                member.guild.id
+            )
+        except discord.HTTPException:
+            logger.exception(
+                "Failed removing New Member role from %s in guild %s.",
+                member.id,
+                member.guild.id
+            )
 
     async def configure_channel_permissions(
         self,
