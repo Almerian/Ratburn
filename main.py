@@ -51,6 +51,7 @@ class Ratburn(commands.Bot):
         await self.load_extension("cogs.audit_logging")
         await self.load_extension("cogs.filter")
         await self.load_extension("cogs.discipline")
+        await self.load_extension("cogs.ratburn_responses")
 
         logger.info(
             "Commands loaded: %s",
