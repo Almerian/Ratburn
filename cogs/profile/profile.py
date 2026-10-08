@@ -120,6 +120,13 @@ def build_profile_embed(
 
     timezone_name = profile["timezone"] or "Not provided"
 
+    if member.joined_at:
+        join_date = member.joined_at.strftime("%m/%d/%y")
+        days_ago = (datetime.now(timezone.utc).date() - member.joined_at.date()).days
+        join_display = f"{join_date}, {days_ago}d ago"
+    else:
+        join_display = "Not available"
+
     if profile["rules_acknowledged"]:
         rules = "✅ Acknowledged"
     else:
@@ -158,6 +165,12 @@ def build_profile_embed(
     embed.add_field(
         name="⚠️ Demerits",
         value=f"**{demerit_count}**",
+        inline=True
+    )
+
+    embed.add_field(
+        name="📅 Join Date",
+        value=join_display,
         inline=True
     )
 
