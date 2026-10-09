@@ -122,5 +122,4 @@ BUILT_IN_QUESTIONS = [
 ]
 
 def get_builtin_questions() -> list[dict[str, str]]:
-
-return [question.copy() for question in BUILT_IN_QUESTIONS]
+  return [question.copy() for question in BUILT_IN_QUESTIONS]
