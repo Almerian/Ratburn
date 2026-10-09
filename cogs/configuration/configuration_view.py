@@ -1109,6 +1109,7 @@ class RatTrapChannelNameModal(
         self.bot = bot
         self.guild_id = guild_id
 
+    
     async def on_submit(
         self,
         interaction: discord.Interaction
@@ -1131,7 +1132,8 @@ class RatTrapChannelNameModal(
             )
             return
 
-        # Create the channel at the top of the channel list.
+        await interaction.response.defer(ephemeral=True)
+
         try:
             channel = await guild.create_text_channel(
                 name=name,
@@ -1140,48 +1142,50 @@ class RatTrapChannelNameModal(
             )
 
         except discord.Forbidden:
-            await interaction.response.send_message(
-                "I couldn't create the channel. Please check that "
-                "Ratburn has the **Manage Channels** permission.",
-                ephemeral=True
+            await interaction.edit_original_response(
+                content=(
+                    "I couldn't create the channel. Please check "
+                    "that Ratburn has the **Manage Channels** permission."
+                ),
+                embed=None,
+                view=None
             )
             return
 
         except discord.HTTPException:
-            await interaction.response.send_message(
-                "Something went wrong while creating the channel. "
-                "Please try again.",
-                ephemeral=True
+            await interaction.edit_original_response(
+                content=(
+                    "Something went wrong while creating the channel. "
+                    "Please try again."
+                ),
+                embed=None,
+                view=None
             )
             return
 
-        # Save the new channel using the existing config field.
         self.bot.database.set_config(
             self.guild_id,
             "rat_trap_channel_id",
             channel.id
         )
 
-        # Reuse the existing permission setup.
         new_member = self.bot.get_cog("NewMember")
 
         if new_member is not None:
             await new_member.configure_channel_permissions(guild)
 
-        # Return to the main configuration screen.
         view = ConfigView(
             self.bot,
             self.guild_id
         )
 
-        await interaction.response.send_message(
+        await interaction.edit_original_response(
             content=(
                 f"✅ Created {channel.mention} and saved it as "
                 "the Rat-Trap channel."
             ),
             embed=view.build_embed(),
-            view=view,
-            ephemeral=True
+            view=view
         )
 
 
