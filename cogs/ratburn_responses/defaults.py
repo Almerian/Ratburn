@@ -14,7 +14,7 @@ RESPONSE_POOLS = {
             "There are worse things than being bored. For example, being unprepared.",
             "Perhaps you might begin a discussion of literature, history, or another suitably worthwhile subject.",
             "I am certain you can find something productive to occupy yourself. I have every confidence in you.",
-            "If you insist upon being entertained, I suggest you start by entertaining an original thought.",
+            "You want to be entertained? How about entertaining a thought for once?",
             "A little intellectual curiosity can transform a dull afternoon."
         ],
     },
@@ -138,7 +138,7 @@ RESPONSE_POOLS = {
             "I appreciate your honesty. Now, let us see how you intend to remedy the situation.",
             "A mistake is an opportunity to learn. Repeating it is a rather different matter.",
             "The work will not become shorter simply because you postpone it.",
-            "Very well. Let us focus on solutions rather than dwelling upon the problem."
+            "All right. What's done is done. What are we going to do about it?"
         ],
     },
     
@@ -176,7 +176,7 @@ RESPONSE_POOLS = {
             "A little cake after a long day of teaching? I see no objection.",
             "One must nourish the mind. The occasional treat does no harm, either.",
             "I would never interrupt an important lesson for a snack. Unless it were a particularly good cake.",
-            "Please remember to eat properly. You cannot run an entire server on caffeine and determination alone.",
+            "Do eat something, please. Caffeine and determination are not food groups.",
             "Dessert is best enjoyed after one's responsibilities have been attended to.",
             "I believe a well-earned treat is perfectly reasonable. Emphasis on well-earned."
         ],
@@ -195,7 +195,7 @@ RESPONSE_POOLS = {
         "responses": [
             "A grade is a measurement of your work, not the entirety of your worth.",
             "Excellent work deserves recognition. Poor work deserves improvement.",
-            "I do hope you've done better than you did last time.",
+            "Well? Better than last time, I hope?",
             "One disappointing result is not the end of the world. Repeated carelessness, however...",
             "I shall reserve judgment until I have seen the evidence.",
             "An A is lovely, but I do expect you to have learned something along the way.",
@@ -215,7 +215,7 @@ RESPONSE_POOLS = {
         ],
         "responses": [
             "Good day. I trust you've come prepared.",
-            "Ah, hello. Do you have a question, or are you merely checking whether I am paying attention?",
+            "Ah, hello. Do you have a question, or are you testing whether I am paying attention?",
             "Good morning! A fresh day and a fresh opportunity to learn something.",
             "Hello there. Please, take a seat. Figuratively, of course.",
             "Greetings. I hope your day has been productive.",
@@ -249,8 +249,9 @@ RESPONSE_POOLS = {
         "responses": [
             "Magic tricks are no substitute for studying.",
             "Very well. Prepare to be amazed!",
+            "Pick a card! Any card! Oh, don't look so suspicious. I haven't even done anything yet.",
             "Actually, I know a bit about magic...",
-            "Pick a card, any card! No? Not a...fan of magic...?",
+            "Want to see a card trick? No? Not a...fan of magic...?",
             "I assure you, there is no magic that'll give you good grades.",
         ],
     },
@@ -293,7 +294,7 @@ RESPONSE_POOLS = {
             "Splendid. You see what a little perseverance can accomplish?",
             "I knew you were capable of it. Do try to remember that next time you doubt yourself.",
             "A job well done deserves acknowledgment. You have mine.",
-            "Remarkable! I shall have to make a note of this.",
+            "Remarkable! Someone fetch me a pen. This deserves to go on record.",
             "You have earned a brief respite. Do not squander it entirely.",
             "Very impressive! But...try not to let it go to your head.",
             "There is genuine satisfaction in a task completed properly. Enjoy it."
@@ -317,7 +318,7 @@ RESPONSE_POOLS = {
                 "One should never judge a book by its cover. Its contents, on the other hand, are fair game.",
                 "A quiet afternoon, a cup of tea, and a good book. What more could one reasonably require?",
                 "I do hope you have read the original rather than relying entirely upon the film adaptation.",
-                "Reading broadens the mind. Something this server could occasionally benefit from.",
+                "Reading broadens the mind. Judging by some of the discussions here, we have considerable room for improvement.",
                 "A well-placed literary reference is always appreciated. A poorly placed one will be corrected."
             ],
         },
@@ -356,7 +357,7 @@ RESPONSE_POOLS = {
         "responses": [
             "I am present and accounted for. Unlike certain students, I do not skip class.",
             "A moment, please. I shall determine whether the problem lies with the server...or with our expectations.",
-            "If I am responding to this message, at least part of my system remains operational.",
+            "If you're reading this, I'm clearly not entirely offline. Excellent deduction.",
             "I assure you, I am monitoring the situation with the utmost seriousness.",
             "Please remain calm. Panic is rarely a useful troubleshooting strategy.",
             "The system deserves the same patience we extend to a student learning a difficult concept."
@@ -378,7 +379,7 @@ RESPONSE_POOLS = {
             "We will resume when everyone is ready to behave like civilized people.",
             "I can assure you that whatever you wish to say will still be there in a moment.",
             "One voice at a time, please. This is a discussion, not a shouting competition.",
-            "I am perfectly capable of waiting. Are you?",
+            "I can wait. All afternoon, if necessary. Can you?",
             "If you have finished your conversation, we might return to the lesson."
         ],
     },
@@ -455,7 +456,7 @@ RESPONSE_POOLS = {
             "just joined",
         ],
         "responses": [
-            "Welcome to our little community. I trust you shall make yourself comfortable and behave appropriately.",
+            "Welcome! Make yourself at home. Behave yourself. And do try to enjoy your stay.",
             "Ah, a new student! Do introduce yourself when you have a moment.",
             "Welcome! The rules are posted, the channels are organized, and the reading list is optional. Mostly.",
             "Please make our newest member feel welcome. Kindness is not a difficult assignment.",
