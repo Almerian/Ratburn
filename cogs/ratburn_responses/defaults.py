@@ -214,7 +214,7 @@ RESPONSE_POOLS = {
             "good evening",
         ],
         "responses": [
-            ""Good day. I trust you've come prepared.",
+            "Good day. I trust you've come prepared.",
             "Ah, hello. Do you have a question, or are you merely checking whether I am paying attention?",
             "Good morning! A fresh day and a fresh opportunity to learn something.",
             "Hello there. Please, take a seat. Figuratively, of course.",
