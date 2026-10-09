@@ -980,6 +980,7 @@ class DetentionChannelSelect(discord.ui.ChannelSelect):
         )
 
 
+
 class RatTrapChannelView(discord.ui.View):
     def __init__(self, bot, guild_id: int):
         super().__init__(timeout=300)
@@ -995,9 +996,28 @@ class RatTrapChannelView(discord.ui.View):
         )
 
     @discord.ui.button(
+        label="Create New Channel",
+        emoji="➕",
+        style=discord.ButtonStyle.primary,
+        row=1
+    )
+    async def create_channel(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+        await interaction.response.send_modal(
+            RatTrapChannelNameModal(
+                self.bot,
+                self.guild_id
+            )
+        )
+
+    @discord.ui.button(
         label="Save",
         emoji="💾",
-        style=discord.ButtonStyle.success
+        style=discord.ButtonStyle.success,
+        row=1
     )
     async def save(
         self,
@@ -1018,7 +1038,7 @@ class RatTrapChannelView(discord.ui.View):
 
         if select.selected_channel_id is None:
             await interaction.response.send_message(
-                "Please choose a channel first.",
+                "Please choose a channel first, or create a new one.",
                 ephemeral=True
             )
             return
@@ -1050,7 +1070,8 @@ class RatTrapChannelView(discord.ui.View):
     @discord.ui.button(
         label="Back",
         emoji="◀️",
-        style=discord.ButtonStyle.secondary
+        style=discord.ButtonStyle.secondary,
+        row=1
     )
     async def back(
         self,
@@ -1066,6 +1087,101 @@ class RatTrapChannelView(discord.ui.View):
             content="**What would you like to configure?**",
             embed=None,
             view=view
+        )
+
+
+
+class RatTrapChannelNameModal(
+    discord.ui.Modal,
+    title="Create Rat-Trap Channel"
+):
+    channel_name = discord.ui.TextInput(
+        label="Channel name",
+        placeholder="rat-trap",
+        required=True,
+        min_length=1,
+        max_length=100
+    )
+
+    def __init__(self, bot, guild_id: int):
+        super().__init__()
+
+        self.bot = bot
+        self.guild_id = guild_id
+
+    async def on_submit(
+        self,
+        interaction: discord.Interaction
+    ):
+        guild = interaction.guild
+
+        if guild is None or guild.id != self.guild_id:
+            await interaction.response.send_message(
+                "I couldn't determine which server to use.",
+                ephemeral=True
+            )
+            return
+
+        name = self.channel_name.value.strip()
+
+        if not name:
+            await interaction.response.send_message(
+                "Please enter a channel name.",
+                ephemeral=True
+            )
+            return
+
+        # Create the channel at the top of the channel list.
+        try:
+            channel = await guild.create_text_channel(
+                name=name,
+                position=0,
+                reason="Ratburn Rat-Trap configuration"
+            )
+
+        except discord.Forbidden:
+            await interaction.response.send_message(
+                "I couldn't create the channel. Please check that "
+                "Ratburn has the **Manage Channels** permission.",
+                ephemeral=True
+            )
+            return
+
+        except discord.HTTPException:
+            await interaction.response.send_message(
+                "Something went wrong while creating the channel. "
+                "Please try again.",
+                ephemeral=True
+            )
+            return
+
+        # Save the new channel using the existing config field.
+        self.bot.database.set_config(
+            self.guild_id,
+            "rat_trap_channel_id",
+            channel.id
+        )
+
+        # Reuse the existing permission setup.
+        new_member = self.bot.get_cog("NewMember")
+
+        if new_member is not None:
+            await new_member.configure_channel_permissions(guild)
+
+        # Return to the main configuration screen.
+        view = ConfigView(
+            self.bot,
+            self.guild_id
+        )
+
+        await interaction.response.send_message(
+            content=(
+                f"✅ Created {channel.mention} and saved it as "
+                "the Rat-Trap channel."
+            ),
+            embed=view.build_embed(),
+            view=view,
+            ephemeral=True
         )
 
 
