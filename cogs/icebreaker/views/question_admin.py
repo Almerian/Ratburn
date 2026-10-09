@@ -10,10 +10,10 @@ MAX_QUESTION_LENGTH = 300
 
 
 def can_manage_questions(interaction: discord.Interaction) -> bool:
-    """Only server members with Manage Server can edit questions."""
     return (
         interaction.guild is not None
-        and interaction.guild_permissions.manage_guild
+        and isinstance(interaction.user, discord.Member)
+        and interaction.user.guild_permissions.manage_guild
     )
 
 
