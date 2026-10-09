@@ -91,6 +91,64 @@ class DefaultConfirmView(discord.ui.View):
         )
 
 
+
+class ClearConfirmView(discord.ui.View):
+    def __init__(self, filter_view):
+        super().__init__(timeout=60)
+        self.filter_view = filter_view
+
+    @discord.ui.button(
+        label="Cancel",
+        style=discord.ButtonStyle.secondary
+    )
+    async def cancel_button(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+        if not interaction.user.guild_permissions.administrator:
+            await interaction.response.send_message(
+                "Sorry, you need to be an admin for that!",
+                ephemeral=True
+            )
+            return
+
+        await interaction.response.edit_message(
+            content="Clearing the filter was cancelled.",
+            view=None
+        )
+
+    @discord.ui.button(
+        label="Clear All",
+        style=discord.ButtonStyle.danger
+    )
+    async def confirm_button(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+        if not interaction.user.guild_permissions.administrator:
+            await interaction.response.send_message(
+                "Sorry, you need to be an admin for that!",
+                ephemeral=True
+            )
+            return
+
+        self.filter_view.bot.database.clear_filtered_words(
+            self.filter_view.guild_id
+        )
+
+        self.filter_view.words = []
+        self.filter_view.page = 0
+        self.filter_view.update_buttons()
+
+        await interaction.response.edit_message(
+            content="The chat filter has been cleared. No filtered words remain.",
+            embed=self.filter_view.build_embed(),
+            view=self.filter_view
+        )
+
+
 class FilterView(discord.ui.View):
     WORDS_PER_PAGE = 10
 
@@ -215,7 +273,34 @@ class FilterView(discord.ui.View):
         await interaction.response.send_modal(
             RemoveWordsModal(self)
         )
+    
+    @discord.ui.button(
+        label="Clear All",
+        emoji="🧹",
+        style=discord.ButtonStyle.danger,
+        row=1
+    )
+    async def clear_button(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+        if not interaction.user.guild_permissions.administrator:
+            await interaction.response.send_message(
+                "Sorry, you need to be an admin for that!",
+                ephemeral=True
+            )
+            return
 
+        await interaction.response.send_message(
+            "⚠️ **Are you sure you want to clear every filtered word "
+            "for this server?**\n\n"
+            "This will leave the filter blank. It will not restore "
+            "Ratburn's default words.",
+            view=ClearConfirmView(self),
+            ephemeral=True
+        )
+    
     @discord.ui.button(
         label="Default",
         emoji="🔄",
