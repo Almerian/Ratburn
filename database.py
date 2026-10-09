@@ -28,7 +28,10 @@ class Database:
                 audit_log_channel_id INTEGER,
                 timezone TEXT,
                 rules_channel_id INTEGER,
-                rules_message_id INTEGER
+                rules_message_id INTEGER,
+                icebreaker_channel_id INTEGER,
+                icebreaker_enabled INTEGER NOT NULL DEFAULT 1,
+                icebreaker_posting_time TEXT NOT NULL DEFAULT '09:00'
             )
         """)
 
@@ -51,6 +54,9 @@ class Database:
             "timezone": "TEXT",
             "rules_channel_id": "INTEGER",
             "rules_message_id": "INTEGER",
+            "icebreaker_channel_id": "INTEGER",
+            "icebreaker_enabled": "INTEGER NOT NULL DEFAULT 1",
+            "icebreaker_posting_time": "TEXT NOT NULL DEFAULT '09:00'",
         }
 
         for column, column_type in new_columns.items():
@@ -192,7 +198,39 @@ class Database:
                     f"ALTER TABLE discipline_config ADD COLUMN "
                     f"{column} {column_type}"
                 )
+        self.connection.execute("""
+            CREATE TABLE IF NOT EXISTS icebreaker_custom_questions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                guild_id INTEGER NOT NULL,
+                question TEXT NOT NULL COLLATE NOCASE,
+                added_by INTEGER,
+                added_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE (guild_id, question)
+            )
+        """)
 
+        self.connection.execute("""
+            CREATE TABLE IF NOT EXISTS icebreaker_question_usage (
+                guild_id INTEGER NOT NULL,
+                question_key TEXT NOT NULL,
+                used_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (guild_id, question_key)
+            )
+        """)
+
+        self.connection.execute("""
+            CREATE TABLE IF NOT EXISTS icebreaker_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                guild_id INTEGER NOT NULL,
+                question_key TEXT NOT NULL,
+                question_text TEXT NOT NULL,
+                posted_date TEXT NOT NULL,
+                posted_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE (guild_id, posted_date)
+            )
+        """)
+
+        
         self.migrate_quiz_tables()
 
         self.connection.commit()
@@ -320,6 +358,9 @@ class Database:
             "timezone",
             "rules_channel_id",
             "rules_message_id",
+            "icebreaker_channel_id",
+            "icebreaker_enabled",
+            "icebreaker_posting_time",
         }
 
         if setting not in allowed_settings:
@@ -757,6 +798,149 @@ class Database:
             )
 
         self.connection.commit()
+
+
+    def add_icebreaker_question(
+        self,
+        guild_id: int,
+        question: str,
+        added_by: int | None = None
+    ):
+        question = question.strip()
+
+        if not question:
+            raise ValueError("Question cannot be empty.")
+
+        self.connection.execute("""
+            INSERT OR IGNORE INTO icebreaker_custom_questions (
+                guild_id,
+                question,
+                added_by
+            )
+            VALUES (?, ?, ?)
+        """, (
+            guild_id,
+            question,
+            added_by
+        ))
+
+        self.connection.commit()
+
+    def get_icebreaker_questions(self, guild_id: int):
+        return self.connection.execute("""
+            SELECT *
+            FROM icebreaker_custom_questions
+            WHERE guild_id = ?
+            ORDER BY question COLLATE NOCASE
+        """, (guild_id,)).fetchall()
+
+    def remove_icebreaker_question(
+        self,
+        guild_id: int,
+        question_id: int
+    ):
+        self.connection.execute("""
+            DELETE FROM icebreaker_custom_questions
+            WHERE guild_id = ?
+            AND id = ?
+        """, (
+            guild_id,
+            question_id
+        ))
+
+        self.connection.commit()
+
+    def get_icebreaker_used_questions(self, guild_id: int):
+        return {
+            row["question_key"]
+            for row in self.connection.execute("""
+                SELECT question_key
+                FROM icebreaker_question_usage
+                WHERE guild_id = ?
+            """, (guild_id,)).fetchall()
+        }
+
+    def mark_icebreaker_question_used(
+        self,
+        guild_id: int,
+        question_key: str
+    ):
+        self.connection.execute("""
+            INSERT OR IGNORE INTO icebreaker_question_usage (
+                guild_id,
+                question_key
+            )
+            VALUES (?, ?)
+        """, (
+            guild_id,
+            question_key
+        ))
+
+        self.connection.commit()
+
+    def reset_icebreaker_question_usage(self, guild_id: int):
+        self.connection.execute("""
+            DELETE FROM icebreaker_question_usage
+            WHERE guild_id = ?
+        """, (guild_id,))
+
+        self.connection.commit()
+
+    def record_icebreaker_post(
+        self,
+        guild_id: int,
+        question_key: str,
+        question_text: str,
+        posted_date: str
+    ):
+        self.connection.execute("""
+            INSERT INTO icebreaker_history (
+                guild_id,
+                question_key,
+                question_text,
+                posted_date
+            )
+            VALUES (?, ?, ?, ?)
+        """, (
+            guild_id,
+            question_key,
+            question_text,
+            posted_date
+        ))
+
+        self.connection.commit()
+
+    def get_icebreaker_history(
+        self,
+        guild_id: int,
+        limit: int = 30
+    ):
+        return self.connection.execute("""
+            SELECT *
+            FROM icebreaker_history
+            WHERE guild_id = ?
+            ORDER BY posted_date DESC
+            LIMIT ?
+        """, (
+            guild_id,
+            limit
+        )).fetchall()
+
+    def has_icebreaker_posted(
+        self,
+        guild_id: int,
+        posted_date: str
+    ) -> bool:
+        return self.connection.execute("""
+            SELECT 1
+            FROM icebreaker_history
+            WHERE guild_id = ?
+            AND posted_date = ?
+        """, (
+            guild_id,
+            posted_date
+        )).fetchone() is not None
+
 
     def close(self):
         self.connection.close()
