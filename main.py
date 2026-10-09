@@ -31,9 +31,11 @@ class Ratburn(commands.Bot):
         intents.message_content = True
         intents.members = True
 
+        
         super().__init__(
             command_prefix="!",
-            intents=intents
+            intents=intents,
+            max_messages=10000
         )
 
         self.database = Database()
