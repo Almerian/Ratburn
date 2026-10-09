@@ -359,7 +359,15 @@ class Database:
         """, (guild_id, word))
 
         self.connection.commit()
+    
+    def clear_filtered_words(self, guild_id: int):
+        self.connection.execute("""
+            DELETE FROM filtered_words
+            WHERE guild_id = ?
+        """, (guild_id,))
 
+        self.connection.commit()
+    
     def reset_filtered_words_to_default(
         self,
         guild_id: int,
