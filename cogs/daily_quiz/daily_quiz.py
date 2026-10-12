@@ -320,6 +320,9 @@ class DailyQuiz(commands.Cog):
             if not config:
                 continue
 
+            if not config["quiz_enabled"]:
+                continue
+
             timezone_name = config["timezone"]
 
             if not timezone_name:
