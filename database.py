@@ -35,6 +35,7 @@ class Database:
                 icebreaker_enabled INTEGER NOT NULL DEFAULT 1,
                 icebreaker_posting_time TEXT NOT NULL DEFAULT '09:00',
                 quiz_enabled INTEGER NOT NULL DEFAULT 1,
+                quiz_posting_time TEXT NOT NULL DEFAULT '10:00',
                 ratburn_responses_enabled INTEGER NOT NULL DEFAULT 1
             )
         """)
@@ -64,6 +65,7 @@ class Database:
             "icebreaker_enabled": "INTEGER NOT NULL DEFAULT 1",
             "icebreaker_posting_time": "TEXT NOT NULL DEFAULT '09:00'",
             "quiz_enabled": "INTEGER NOT NULL DEFAULT 1",
+            "quiz_posting_time": "TEXT NOT NULL DEFAULT '10:00'",
             "ratburn_responses_enabled": "INTEGER NOT NULL DEFAULT 1",
         }
 
@@ -372,6 +374,7 @@ class Database:
             "icebreaker_enabled",
             "icebreaker_posting_time",
             "quiz_enabled",
+            "quiz_posting_time",
             "ratburn_responses_enabled",
         }
 
