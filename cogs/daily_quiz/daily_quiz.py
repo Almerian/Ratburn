@@ -6,7 +6,6 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import aiohttp
 import discord
-from discord import app_commands
 from discord.ext import commands, tasks
 
 
@@ -19,11 +18,11 @@ class QuizButton(discord.ui.Button):
         quiz_view,
         answer: str,
         correct: bool,
-        position: int
+        position: int,
     ):
         super().__init__(
             label=f"{position}. {answer}",
-            style=discord.ButtonStyle.primary
+            style=discord.ButtonStyle.primary,
         )
 
         self.quiz_view = quiz_view
@@ -36,7 +35,7 @@ class QuizButton(discord.ui.Button):
         if guild is None:
             await interaction.response.send_message(
                 "This quiz can only be answered inside a server.",
-                ephemeral=True
+                ephemeral=True,
             )
             return
 
@@ -45,12 +44,12 @@ class QuizButton(discord.ui.Button):
         if self.quiz_view.bot.database.has_answered_quiz(
             guild.id,
             interaction.user.id,
-            quiz_date
+            quiz_date,
         ):
             await interaction.response.send_message(
                 "You've already answered today's quiz! "
                 "Come back tomorrow for the next one. 🐀",
-                ephemeral=True
+                ephemeral=True,
             )
             return
 
@@ -59,40 +58,40 @@ class QuizButton(discord.ui.Button):
                 guild.id,
                 interaction.user.id,
                 quiz_date,
-                self.correct
+                self.correct,
             )
         except Exception:
             await interaction.response.send_message(
                 "Something went wrong recording your quiz answer.",
-                ephemeral=True
+                ephemeral=True,
             )
             logger.exception(
                 "Failed recording quiz answer in guild %s.",
-                guild.id
+                guild.id,
             )
             return
 
         if self.correct:
             self.quiz_view.bot.database.add_quiz_point(
                 guild.id,
-                interaction.user.id
+                interaction.user.id,
             )
 
             score = self.quiz_view.bot.database.get_quiz_score(
                 guild.id,
-                interaction.user.id
+                interaction.user.id,
             )
 
             await interaction.response.send_message(
-                f"✅ **Correct!** Nice work!\n\n"
-                f"You earned **1 point**. Your total score is now "
+                "✅ **Correct!** Nice work!\n\n"
+                "You earned **1 point**. Your total score is now "
                 f"**{score}**.",
-                ephemeral=True
+                ephemeral=True,
             )
         else:
             await interaction.response.send_message(
                 "❌ **Not quite!** Better luck tomorrow! 🐀",
-                ephemeral=True
+                ephemeral=True,
             )
 
 
@@ -101,7 +100,7 @@ class QuizView(discord.ui.View):
         self,
         bot,
         quiz_date: str,
-        answers: list[tuple[str, bool]]
+        answers: list[tuple[str, bool]],
     ):
         super().__init__(timeout=21600)
 
@@ -111,14 +110,14 @@ class QuizView(discord.ui.View):
 
         for position, (answer, correct) in enumerate(
             answers,
-            start=1
+            start=1,
         ):
             self.add_item(
                 QuizButton(
                     self,
                     answer,
                     correct,
-                    position
+                    position,
                 )
             )
 
@@ -156,7 +155,7 @@ class DailyQuiz(commands.Cog):
                 if response.status != 200:
                     logger.error(
                         "OpenTDB returned HTTP status %s.",
-                        response.status
+                        response.status,
                     )
                     return None
 
@@ -165,7 +164,7 @@ class DailyQuiz(commands.Cog):
         if data.get("response_code") != 0:
             logger.error(
                 "OpenTDB returned response code %s.",
-                data.get("response_code")
+                data.get("response_code"),
             )
             return None
 
@@ -184,16 +183,13 @@ class DailyQuiz(commands.Cog):
             "difficulty": question["difficulty"],
         }
 
-    async def daily_quiz(
-        self,
-        guild: discord.Guild
-    ):
+    async def daily_quiz(self, guild: discord.Guild):
         config = self.bot.database.get_config(guild.id)
 
         if not config:
             logger.warning(
                 "Could not load configuration for guild %s.",
-                guild.id
+                guild.id,
             )
             return False
 
@@ -202,19 +198,17 @@ class DailyQuiz(commands.Cog):
         if not event_channel_id:
             logger.warning(
                 "No Event Channel configured for guild %s.",
-                guild.id
+                guild.id,
             )
             return False
 
-        event_channel = guild.get_channel(
-            event_channel_id
-        )
+        event_channel = guild.get_channel(event_channel_id)
 
         if event_channel is None:
             logger.warning(
                 "Configured Event Channel could not be found "
                 "in guild %s.",
-                guild.id
+                guild.id,
             )
             return False
 
@@ -223,17 +217,17 @@ class DailyQuiz(commands.Cog):
         if not timezone_name:
             logger.warning(
                 "No timezone configured for guild %s.",
-                guild.id
+                guild.id,
             )
             return False
 
         try:
             timezone = ZoneInfo(timezone_name)
-        except ZoneInfoNotFoundError:
+        except (ZoneInfoNotFoundError, ValueError):
             logger.error(
                 "Invalid timezone '%s' configured for guild %s.",
                 timezone_name,
-                guild.id
+                guild.id,
             )
             return False
 
@@ -242,7 +236,7 @@ class DailyQuiz(commands.Cog):
         if question is None:
             logger.warning(
                 "Could not fetch a quiz question for guild %s.",
-                guild.id
+                guild.id,
             )
             return False
 
@@ -251,14 +245,11 @@ class DailyQuiz(commands.Cog):
         ).date().isoformat()
 
         answers = [
-            (
-                question["correct_answer"],
-                True
-            ),
+            (question["correct_answer"], True),
             *[
                 (answer, False)
                 for answer in question["incorrect_answers"]
-            ]
+            ],
         ]
 
         random.shuffle(answers)
@@ -266,7 +257,7 @@ class DailyQuiz(commands.Cog):
         embed = discord.Embed(
             title="🧠 Daily Quiz",
             description=question["question"],
-            color=discord.Color.from_rgb(66, 135, 245)
+            color=discord.Color.from_rgb(66, 135, 245),
         )
 
         embed.set_footer(
@@ -279,31 +270,31 @@ class DailyQuiz(commands.Cog):
         view = QuizView(
             self.bot,
             quiz_date,
-            answers
+            answers,
         )
 
         try:
             message = await event_channel.send(
                 embed=embed,
-                view=view
+                view=view,
             )
             view.message = message
         except discord.Forbidden:
             logger.error(
                 "No permission to post Daily Quiz in guild %s.",
-                guild.id
+                guild.id,
             )
             return False
         except discord.HTTPException:
             logger.exception(
                 "Failed posting Daily Quiz in guild %s.",
-                guild.id
+                guild.id,
             )
             return False
 
         logger.info(
             "Posted Daily Quiz in guild %s.",
-            guild.id
+            guild.id,
         )
 
         return True
@@ -315,95 +306,78 @@ class DailyQuiz(commands.Cog):
         )
 
         for guild in self.bot.guilds:
-            config = self.bot.database.get_config(guild.id)
-
-            if not config:
-                continue
-
-            if not config["quiz_enabled"]:
-                continue
-
-            timezone_name = config["timezone"]
-
-            if not timezone_name:
-                continue
-
             try:
-                timezone = ZoneInfo(timezone_name)
-            except ZoneInfoNotFoundError:
-                logger.error(
-                    "Invalid timezone '%s' configured for guild %s.",
-                    timezone_name,
-                    guild.id
+                config = self.bot.database.get_config(guild.id)
+
+                if not config:
+                    continue
+
+                if not config["quiz_enabled"]:
+                    continue
+
+                timezone_name = config["timezone"]
+
+                if not timezone_name:
+                    continue
+
+                try:
+                    timezone = ZoneInfo(timezone_name)
+                except (ZoneInfoNotFoundError, ValueError):
+                    logger.error(
+                        "Invalid timezone '%s' configured for guild %s.",
+                        timezone_name,
+                        guild.id,
+                    )
+                    continue
+
+                posting_time = (
+                    config["quiz_posting_time"] or "10:00"
                 )
-                continue
 
-            local_now = now_utc.astimezone(timezone)
-            quiz_date = local_now.date().isoformat()
+                try:
+                    scheduled_time = datetime.datetime.strptime(
+                        posting_time,
+                        "%H:%M",
+                    ).time()
+                except (TypeError, ValueError):
+                    logger.error(
+                        "Invalid quiz posting time '%s' "
+                        "configured for guild %s.",
+                        posting_time,
+                        guild.id,
+                    )
+                    continue
 
-            if local_now.hour != 10:
-                continue
+                local_now = now_utc.astimezone(timezone)
+                quiz_date = local_now.date().isoformat()
 
-            if local_now.minute != 0:
-                continue
+                # Only run at the configured local hour and minute.
+                if (
+                    local_now.hour != scheduled_time.hour
+                    or local_now.minute != scheduled_time.minute
+                ):
+                    continue
 
-            if self.last_posted_dates.get(guild.id) == quiz_date:
-                continue
+                # Avoid posting more than once per local calendar day
+                # during the current bot session.
+                if self.last_posted_dates.get(guild.id) == quiz_date:
+                    continue
 
-            success = await self.daily_quiz(guild)
+                success = await self.daily_quiz(guild)
 
-            if success:
-                self.last_posted_dates[guild.id] = quiz_date
+                if success:
+                    self.last_posted_dates[guild.id] = quiz_date
+
+            except Exception:
+                logger.exception(
+                    "Unexpected error scheduling Daily Quiz "
+                    "for guild %s.",
+                    guild.id,
+                )
 
     @daily_quiz_scheduler.before_loop
     async def before_daily_quiz_scheduler(self):
         await self.bot.wait_until_ready()
-
-    @app_commands.command(
-        name="quiz_test",
-        description="Test the Daily Quiz."
-    )
-    @app_commands.default_permissions(administrator=True)
-    async def quiz_test(
-        self,
-        interaction: discord.Interaction
-    ):
-        if interaction.guild is None:
-            await interaction.response.send_message(
-                "This command can only be used inside a server.",
-                ephemeral=True
-            )
-            return
-
-        await interaction.response.defer(
-            ephemeral=True
-        )
-
-        success = await self.daily_quiz(
-            interaction.guild
-        )
-
-        if not success:
-            await interaction.followup.send(
-                "I couldn't post the test question. "
-                "Check the server configuration and Ratburn's "
-                "permissions.",
-                ephemeral=True
-            )
-            return
-
-        config = self.bot.database.get_config(
-            interaction.guild.id
-        )
-
-        event_channel = interaction.guild.get_channel(
-            config["event_channel_id"]
-        )
-
-        await interaction.followup.send(
-            f"Test question posted in {event_channel.mention}.",
-            ephemeral=True
-        )
 
 
 async def setup(bot):
