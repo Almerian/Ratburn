@@ -24,14 +24,17 @@ class Database:
                 rat_trap_channel_id INTEGER,
                 welcome_channel_id INTEGER,
                 birthday_channel_id INTEGER,
+                birthdays_enabled INTEGER NOT NULL DEFAULT 1,
                 event_channel_id INTEGER,
+                events_enabled INTEGER NOT NULL DEFAULT 1
                 audit_log_channel_id INTEGER,
                 timezone TEXT,
                 rules_channel_id INTEGER,
                 rules_message_id INTEGER,
                 icebreaker_channel_id INTEGER,
                 icebreaker_enabled INTEGER NOT NULL DEFAULT 1,
-                icebreaker_posting_time TEXT NOT NULL DEFAULT '09:00'
+                icebreaker_posting_time TEXT NOT NULL DEFAULT '09:00',
+                quiz_enabled INTEGER NOT NULL DEFAULT 1
             )
         """)
 
@@ -49,7 +52,9 @@ class Database:
             "rat_trap_channel_id": "INTEGER",
             "welcome_channel_id": "INTEGER",
             "birthday_channel_id": "INTEGER",
+            "birthdays_enabled": "INTEGER NOT NULL DEFAULT 1",
             "event_channel_id": "INTEGER",
+            "events_enabled": "INTEGER NOT NULL DEFAULT 1",
             "audit_log_channel_id": "INTEGER",
             "timezone": "TEXT",
             "rules_channel_id": "INTEGER",
@@ -57,6 +62,7 @@ class Database:
             "icebreaker_channel_id": "INTEGER",
             "icebreaker_enabled": "INTEGER NOT NULL DEFAULT 1",
             "icebreaker_posting_time": "TEXT NOT NULL DEFAULT '09:00'",
+            "quiz_enabled": "INTEGER NOT NULL DEFAULT 1",
         }
 
         for column, column_type in new_columns.items():
@@ -353,7 +359,9 @@ class Database:
             "rat_trap_channel_id",
             "welcome_channel_id",
             "birthday_channel_id",
+            "birthdays_enabled",
             "event_channel_id",
+            "events_enabled",
             "audit_log_channel_id",
             "timezone",
             "rules_channel_id",
@@ -361,6 +369,7 @@ class Database:
             "icebreaker_channel_id",
             "icebreaker_enabled",
             "icebreaker_posting_time",
+            "quiz_enabled",
         }
 
         if setting not in allowed_settings:
