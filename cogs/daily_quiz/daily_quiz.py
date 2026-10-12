@@ -351,15 +351,12 @@ class DailyQuiz(commands.Cog):
                 local_now = now_utc.astimezone(timezone)
                 quiz_date = local_now.date().isoformat()
 
-                # Only run at the configured local hour and minute.
                 if (
                     local_now.hour != scheduled_time.hour
                     or local_now.minute != scheduled_time.minute
                 ):
                     continue
 
-                # Avoid posting more than once per local calendar day
-                # during the current bot session.
                 if self.last_posted_dates.get(guild.id) == quiz_date:
                     continue
 
