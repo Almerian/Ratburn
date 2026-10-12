@@ -1070,6 +1070,13 @@ class Database:
             WHERE id = ?
         """, (post_id,)).fetchone()
 
+    def get_reaction_role_post_by_message(self, message_id: int):
+        return self.connection.execute("""
+            SELECT *
+            FROM reaction_role_posts
+            WHERE message_id = ?
+        """, (message_id,)).fetchone()
+
     def update_reaction_role_post(
         self,
         post_id: int,
