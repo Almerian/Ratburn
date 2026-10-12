@@ -1,6 +1,8 @@
 import discord
 from datetime import datetime
 
+from cogs.reaction_roles.views.dashboard import ReactionRolesDashboardView
+
 #===========================================================================
 
 TIMEZONE_OPTIONS = [
@@ -131,6 +133,27 @@ class ConfigView(discord.ui.View):
         from cogs.discipline.discipline_config_view import DisciplineConfigView
 
         view = DisciplineConfigView(self.bot, self.guild_id)
+        await interaction.response.edit_message(
+            content=None,
+            embed=view.build_embed(),
+            view=view
+        )
+
+    @discord.ui.button(
+        label="Reaction Roles",
+        emoji="🎭",
+        style=discord.ButtonStyle.primary
+    )
+    async def reaction_roles(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+        view = ReactionRolesDashboardView(
+            self.bot,
+            self.guild_id
+        )
+
         await interaction.response.edit_message(
             content=None,
             embed=view.build_embed(),
