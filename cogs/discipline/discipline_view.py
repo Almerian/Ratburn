@@ -72,7 +72,7 @@ class DisciplineRecordView(discord.ui.View):
             reason = reason[:247] + "..."
 
         lines = [
-            f"**#{action}**",
+            f"**{action}**",
             f"Reason: {reason}",
             f"Issued: {record['created_at']}",
         ]
