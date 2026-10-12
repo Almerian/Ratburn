@@ -64,8 +64,6 @@ class ConfigView(discord.ui.View):
             ("Detention Channel", channel_value(config["detention_channel_id"])),
             ("Rat-Trap", channel_value(config["rat_trap_channel_id"])),
             ("Welcome Channel", channel_value(config["welcome_channel_id"])),
-            ("Birthday Channel", channel_value(config["birthday_channel_id"])),
-            ("Event Channel", channel_value(config["event_channel_id"])),
             ("Audit Log Channel", channel_value(config["audit_log_channel_id"])),
             (
                 "Timezone",
@@ -74,15 +72,6 @@ class ConfigView(discord.ui.View):
             (
                 "Rules Message",
                 "🟢 Configured" if config["rules_message_id"] else "🔴 Not configured"
-            ),
-            ("Icebreaker Channel", channel_value(config["icebreaker_channel_id"])),
-            (
-                "Icebreaker Posting Time",
-                f"🟢 {posting_time} ({timezone})"
-            ),
-            (
-                "Daily Icebreaker",
-                "🟢 Enabled" if config["icebreaker_enabled"] else "🔴 Disabled"
             ),
         ]
 
@@ -105,6 +94,27 @@ class ConfigView(discord.ui.View):
         await interaction.response.edit_message(
             content="**What would you like to configure?**",
             embed=None,
+            view=view
+        )
+
+    @discord.ui.button(
+        label="Entertainment Config",
+        emoji="🎉",
+        style=discord.ButtonStyle.primary
+    )
+    async def entertainment_config(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+        view = EntertainmentConfigView(
+            self.bot,
+            self.guild_id
+        )
+
+        await interaction.response.edit_message(
+            content=None,
+            embed=view.build_embed(),
             view=view
         )
 
@@ -164,6 +174,339 @@ class ConfigEditView(discord.ui.View):
         )
 
 
+class EntertainmentConfigView(discord.ui.View):
+    def __init__(self, bot, guild_id: int):
+        super().__init__(timeout=300)
+        self.bot = bot
+        self.guild_id = guild_id
+
+        self.add_item(
+            EntertainmentSettingSelect(bot, guild_id)
+        )
+
+    def build_embed(self):
+        config = self.bot.database.get_config(self.guild_id)
+
+        def status(key):
+            return "🟢 Enabled" if config[key] else "🔴 Disabled"
+
+        def channel(channel_id):
+            return (
+                f"<#{channel_id}>"
+                if channel_id
+                else "Not configured"
+            )
+
+        timezone = config["timezone"] or "Timezone not configured"
+        posting_time = config["icebreaker_posting_time"] or "09:00"
+
+        embed = discord.Embed(
+            title="🎉 Entertainment Configuration",
+            description=(
+                "Manage Ratburn's scheduled entertainment features. "
+                "Each feature can be enabled or disabled independently."
+            )
+        )
+
+        embed.add_field(
+            name="🧠 Daily Quiz",
+            value=status("quiz_enabled"),
+            inline=True
+        )
+        embed.add_field(
+            name="📚 Daily Icebreaker",
+            value=status("icebreaker_enabled"),
+            inline=True
+        )
+        embed.add_field(
+            name="🎂 Birthdays",
+            value=status("birthdays_enabled"),
+            inline=True
+        )
+        embed.add_field(
+            name="📅 Events",
+            value=status("events_enabled"),
+            inline=True
+        )
+        embed.add_field(
+            name="Icebreaker Channel",
+            value=channel(config["icebreaker_channel_id"]),
+            inline=True
+        )
+        embed.add_field(
+            name="Icebreaker Posting Time",
+            value=f"{posting_time} ({timezone})",
+            inline=True
+        )
+        embed.add_field(
+            name="Birthday Channel",
+            value=channel(config["birthday_channel_id"]),
+            inline=True
+        )
+        embed.add_field(
+            name="Event Channel",
+            value=channel(config["event_channel_id"]),
+            inline=True
+        )
+
+        return embed
+
+    @discord.ui.button(
+        label="Back to Configuration",
+        emoji="◀️",
+        style=discord.ButtonStyle.secondary
+    )
+    async def back(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+        view = ConfigView(self.bot, self.guild_id)
+
+        await interaction.response.edit_message(
+            content=None,
+            embed=view.build_embed(),
+            view=view
+        )
+
+
+class EntertainmentSettingSelect(discord.ui.Select):
+    def __init__(self, bot, guild_id: int):
+        self.bot = bot
+        self.guild_id = guild_id
+
+        options = [
+            discord.SelectOption(
+                label="Daily Quiz On/Off",
+                value="quiz_enabled",
+                emoji="🧠"
+            ),
+            discord.SelectOption(
+                label="Icebreaker On/Off",
+                value="icebreaker_enabled",
+                emoji="📚"
+            ),
+            discord.SelectOption(
+                label="Icebreaker Channel",
+                value="icebreaker_channel_id",
+                emoji="💬"
+            ),
+            discord.SelectOption(
+                label="Icebreaker Posting Time",
+                value="icebreaker_posting_time",
+                emoji="⏰"
+            ),
+            discord.SelectOption(
+                label="Birthdays On/Off",
+                value="birthdays_enabled",
+                emoji="🎂"
+            ),
+            discord.SelectOption(
+                label="Birthday Channel",
+                value="birthday_channel_id",
+                emoji="🎂"
+            ),
+            discord.SelectOption(
+                label="Events On/Off",
+                value="events_enabled",
+                emoji="📅"
+            ),
+            discord.SelectOption(
+                label="Event Channel",
+                value="event_channel_id",
+                emoji="📅"
+            ),
+        ]
+
+        super().__init__(
+            placeholder="Choose an entertainment setting...",
+            options=options
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        setting = self.values[0]
+
+        toggle_features = {
+            "quiz_enabled": (
+                "Daily Quiz",
+                "🧠",
+                "The daily quiz will be posted at 10:00 AM "
+                "in this server's timezone."
+            ),
+            "icebreaker_enabled": (
+                "Daily Icebreaker",
+                "📚",
+                "Daily conversation starters will be posted "
+                "at the configured time."
+            ),
+            "birthdays_enabled": (
+                "Birthdays",
+                "🎂",
+                "Birthday announcements and birthday-role "
+                "processing will run for this server."
+            ),
+            "events_enabled": (
+                "Events",
+                "📅",
+                "Event reminders and start announcements "
+                "will run for this server."
+            ),
+        }
+
+        if setting in toggle_features:
+            name, emoji, description = toggle_features[setting]
+
+            view = FeatureToggleView(
+                self.bot,
+                self.guild_id,
+                setting,
+                name,
+                emoji,
+                description
+            )
+
+            await interaction.response.edit_message(
+                content=None,
+                embed=view.build_embed(),
+                view=view
+            )
+            return
+
+        channel_views = {
+            "icebreaker_channel_id": (
+                IcebreakerChannelView,
+                "Choose the channel for daily Icebreakers."
+            ),
+            "icebreaker_posting_time": (
+                IcebreakerPostingTimeView,
+                "Choose when daily Icebreakers should be posted."
+            ),
+            "birthday_channel_id": (
+                BirthdayChannelView,
+                "Choose the channel for birthday announcements."
+            ),
+            "event_channel_id": (
+                EventChannelView,
+                "Choose the channel for event reminders."
+            ),
+        }
+
+        view_class, message = channel_views[setting]
+        view = view_class(self.bot, self.guild_id)
+
+        embed = (
+            view.build_embed()
+            if hasattr(view, "build_embed")
+            else None
+        )
+
+        await interaction.response.edit_message(
+            content=message if embed is None else None,
+            embed=embed,
+            view=view
+        )
+
+
+class FeatureToggleView(discord.ui.View):
+    def __init__(
+        self,
+        bot,
+        guild_id: int,
+        setting_key: str,
+        feature_name: str,
+        emoji: str,
+        enabled_description: str
+    ):
+        super().__init__(timeout=300)
+
+        self.bot = bot
+        self.guild_id = guild_id
+        self.setting_key = setting_key
+        self.feature_name = feature_name
+        self.emoji = emoji
+        self.enabled_description = enabled_description
+
+        self.toggle_button = discord.ui.Button(
+            style=discord.ButtonStyle.primary
+        )
+        self.toggle_button.callback = self.toggle
+        self.add_item(self.toggle_button)
+
+        self.add_item(
+            discord.ui.Button(
+                label="Back to Entertainment",
+                emoji="◀️",
+                style=discord.ButtonStyle.secondary,
+                custom_id=f"entertainment_back_{setting_key}"
+            )
+        )
+
+        self.children[-1].callback = self.back
+        self.update_button()
+
+    def is_enabled(self):
+        config = self.bot.database.get_config(self.guild_id)
+        return bool(config[self.setting_key])
+
+    def update_button(self):
+        enabled = self.is_enabled()
+
+        self.toggle_button.label = (
+            f"Disable {self.feature_name}"
+            if enabled
+            else f"Enable {self.feature_name}"
+        )
+        self.toggle_button.style = (
+            discord.ButtonStyle.danger
+            if enabled
+            else discord.ButtonStyle.success
+        )
+
+    def build_embed(self):
+        enabled = self.is_enabled()
+
+        return discord.Embed(
+            title=f"{self.emoji} {self.feature_name}",
+            description=(
+                f"Status: **🟢 Enabled**\n\n"
+                f"{self.enabled_description}"
+                if enabled
+                else
+                "Status: **🔴 Disabled**\n\n"
+                "This feature's scheduled work is paused for this server. "
+                "Your saved settings and data will be kept."
+            )
+        )
+
+    async def toggle(self, interaction: discord.Interaction):
+        new_value = 0 if self.is_enabled() else 1
+
+        self.bot.database.set_config(
+            self.guild_id,
+            self.setting_key,
+            new_value
+        )
+
+        self.update_button()
+
+        await interaction.response.edit_message(
+            content=None,
+            embed=self.build_embed(),
+            view=self
+        )
+
+    async def back(self, interaction: discord.Interaction):
+        view = EntertainmentConfigView(
+            self.bot,
+            self.guild_id
+        )
+
+        await interaction.response.edit_message(
+            content=None,
+            embed=view.build_embed(),
+            view=view
+        )
+
 
 class ConfigSettingSelect(discord.ui.Select):
     def __init__(self, bot, guild_id: int):
@@ -176,14 +519,9 @@ class ConfigSettingSelect(discord.ui.Select):
             discord.SelectOption(label="Detention Channel", value="detention_channel_id", emoji="🔒"),
             discord.SelectOption(label="Rat-Trap Channel", value="rat_trap_channel_id", emoji="🐀"),
             discord.SelectOption(label="Welcome Channel", value="welcome_channel_id", emoji="👋"),
-            discord.SelectOption(label="Birthday Channel", value="birthday_channel_id", emoji="🎂"),
-            discord.SelectOption(label="Event Channel", value="event_channel_id", emoji="📅"),
             discord.SelectOption(label="Audit Log Channel", value="audit_log_channel_id", emoji="📋"),
             discord.SelectOption(label="Timezone", value="timezone", emoji="🌎"),
             discord.SelectOption(label="Rules Message", value="rules_message", emoji="📜"),
-            discord.SelectOption(label="Icebreaker Channel", value="icebreaker_channel_id", emoji="💬"),
-            discord.SelectOption(label="Icebreaker Posting Time", value="icebreaker_posting_time", emoji="⏰"),
-            discord.SelectOption(label="Icebreaker Enabled/Disabled", value="icebreaker_enabled", emoji="🔔"),
         ]
 
         super().__init__(
@@ -215,14 +553,6 @@ class ConfigSettingSelect(discord.ui.Select):
                 WelcomeChannelView,
                 "**Choose the channel where Ratburn will welcome new members.**"
             ),
-            "birthday_channel_id": (
-                BirthdayChannelView,
-                "**Choose the channel Ratburn should use for birthday announcements.**"
-            ),
-            "event_channel_id": (
-                EventChannelView,
-                "**Choose the channel Ratburn should use for events and reminders.**"
-            ),
             "audit_log_channel_id": (
                 AuditLogChannelView,
                 "**Choose the channel Ratburn should use for audit logs.**"
@@ -234,18 +564,6 @@ class ConfigSettingSelect(discord.ui.Select):
             "rules_message": (
                 RulesMessageView,
                 "**Choose the rules message Ratburn should use.**"
-            ),
-            "icebreaker_channel_id": (
-                IcebreakerChannelView,
-                "**Choose the channel where the daily Icebreaker will be posted.**"
-            ),
-            "icebreaker_posting_time": (
-                IcebreakerPostingTimeView,
-                "**Choose when the daily Icebreaker should be posted.**"
-            ),
-            "icebreaker_enabled": (
-                IcebreakerEnabledView,
-                "**Enable or disable the daily Icebreaker for this server.**"
             ),
         }
 
@@ -1153,40 +1471,22 @@ class WelcomeChannelSelect(discord.ui.ChannelSelect):
 class BirthdayChannelView(discord.ui.View):
     def __init__(self, bot, guild_id: int):
         super().__init__(timeout=300)
-
         self.bot = bot
         self.guild_id = guild_id
-
-        self.add_item(
-            BirthdayChannelSelect(
-                bot,
-                guild_id
-            )
-        )
+        self.add_item(BirthdayChannelSelect(bot, guild_id))
 
     @discord.ui.button(
         label="Save",
         emoji="💾",
         style=discord.ButtonStyle.success
     )
-    async def save(
-        self,
-        interaction: discord.Interaction,
-        button: discord.ui.Button
-    ):
+    async def save(self, interaction: discord.Interaction, button: discord.ui.Button):
         select = next(
-            (
-                child
-                for child in self.children
-                if isinstance(child, BirthdayChannelSelect)
-            ),
+            (child for child in self.children if isinstance(child, BirthdayChannelSelect)),
             None
         )
 
-        if select is None:
-            return
-
-        if select.selected_channel_id is None:
+        if select is None or select.selected_channel_id is None:
             await interaction.response.send_message(
                 "Please choose a channel first.",
                 ephemeral=True
@@ -1199,11 +1499,7 @@ class BirthdayChannelView(discord.ui.View):
             select.selected_channel_id
         )
 
-        view = ConfigView(
-            self.bot,
-            self.guild_id
-        )
-
+        view = EntertainmentConfigView(self.bot, self.guild_id)
         await interaction.response.edit_message(
             content=None,
             embed=view.build_embed(),
@@ -1215,19 +1511,11 @@ class BirthdayChannelView(discord.ui.View):
         emoji="◀️",
         style=discord.ButtonStyle.secondary
     )
-    async def back(
-        self,
-        interaction: discord.Interaction,
-        button: discord.ui.Button
-    ):
-        view = ConfigEditView(
-            self.bot,
-            self.guild_id
-        )
-
+    async def back(self, interaction: discord.Interaction, button: discord.ui.Button):
+        view = EntertainmentConfigView(self.bot, self.guild_id)
         await interaction.response.edit_message(
-            content="**What would you like to configure?**",
-            embed=None,
+            content=None,
+            embed=view.build_embed(),
             view=view
         )
 
@@ -1242,23 +1530,17 @@ class BirthdayChannelSelect(discord.ui.ChannelSelect):
             placeholder="Choose the birthday channel...",
             min_values=1,
             max_values=1,
-            channel_types=[
-                discord.ChannelType.text
-            ]
+            channel_types=[discord.ChannelType.text]
         )
 
-    async def callback(
-        self,
-        interaction: discord.Interaction
-    ):
+    async def callback(self, interaction: discord.Interaction):
         self.selected_channel_id = self.values[0].id
-
         await interaction.response.edit_message(
             content=(
-                f"**Birthday channel selected:** "
-                f"{self.values[0].mention}\n\n"
+                f"**Birthday channel selected:** {self.values[0].mention}\n\n"
                 "Click **Save** to apply this change."
             ),
+            embed=None,
             view=self.view
         )
 
@@ -1266,40 +1548,22 @@ class BirthdayChannelSelect(discord.ui.ChannelSelect):
 class EventChannelView(discord.ui.View):
     def __init__(self, bot, guild_id: int):
         super().__init__(timeout=300)
-
         self.bot = bot
         self.guild_id = guild_id
-
-        self.add_item(
-            EventChannelSelect(
-                bot,
-                guild_id
-            )
-        )
+        self.add_item(EventChannelSelect(bot, guild_id))
 
     @discord.ui.button(
         label="Save",
         emoji="💾",
         style=discord.ButtonStyle.success
     )
-    async def save(
-        self,
-        interaction: discord.Interaction,
-        button: discord.ui.Button
-    ):
+    async def save(self, interaction: discord.Interaction, button: discord.ui.Button):
         select = next(
-            (
-                child
-                for child in self.children
-                if isinstance(child, EventChannelSelect)
-            ),
+            (child for child in self.children if isinstance(child, EventChannelSelect)),
             None
         )
 
-        if select is None:
-            return
-
-        if select.selected_channel_id is None:
+        if select is None or select.selected_channel_id is None:
             await interaction.response.send_message(
                 "Please choose a channel first.",
                 ephemeral=True
@@ -1312,11 +1576,7 @@ class EventChannelView(discord.ui.View):
             select.selected_channel_id
         )
 
-        view = ConfigView(
-            self.bot,
-            self.guild_id
-        )
-
+        view = EntertainmentConfigView(self.bot, self.guild_id)
         await interaction.response.edit_message(
             content=None,
             embed=view.build_embed(),
@@ -1328,19 +1588,11 @@ class EventChannelView(discord.ui.View):
         emoji="◀️",
         style=discord.ButtonStyle.secondary
     )
-    async def back(
-        self,
-        interaction: discord.Interaction,
-        button: discord.ui.Button
-    ):
-        view = ConfigEditView(
-            self.bot,
-            self.guild_id
-        )
-
+    async def back(self, interaction: discord.Interaction, button: discord.ui.Button):
+        view = EntertainmentConfigView(self.bot, self.guild_id)
         await interaction.response.edit_message(
-            content="**What would you like to configure?**",
-            embed=None,
+            content=None,
+            embed=view.build_embed(),
             view=view
         )
 
@@ -1355,23 +1607,17 @@ class EventChannelSelect(discord.ui.ChannelSelect):
             placeholder="Choose the event channel...",
             min_values=1,
             max_values=1,
-            channel_types=[
-                discord.ChannelType.text
-            ]
+            channel_types=[discord.ChannelType.text]
         )
 
-    async def callback(
-        self,
-        interaction: discord.Interaction
-    ):
+    async def callback(self, interaction: discord.Interaction):
         self.selected_channel_id = self.values[0].id
-
         await interaction.response.edit_message(
             content=(
-                f"**Event channel selected:** "
-                f"{self.values[0].mention}\n\n"
+                f"**Event channel selected:** {self.values[0].mention}\n\n"
                 "Click **Save** to apply this change."
             ),
+            embed=None,
             view=self.view
         )
 
@@ -1379,40 +1625,22 @@ class EventChannelSelect(discord.ui.ChannelSelect):
 class AuditLogChannelView(discord.ui.View):
     def __init__(self, bot, guild_id: int):
         super().__init__(timeout=300)
-
         self.bot = bot
         self.guild_id = guild_id
-
-        self.add_item(
-            AuditLogChannelSelect(
-                bot,
-                guild_id
-            )
-        )
+        self.add_item(AuditLogChannelSelect(bot, guild_id))
 
     @discord.ui.button(
         label="Save",
         emoji="💾",
         style=discord.ButtonStyle.success
     )
-    async def save(
-        self,
-        interaction: discord.Interaction,
-        button: discord.ui.Button
-    ):
+    async def save(self, interaction: discord.Interaction, button: discord.ui.Button):
         select = next(
-            (
-                child
-                for child in self.children
-                if isinstance(child, AuditLogChannelSelect)
-            ),
+            (child for child in self.children if isinstance(child, AuditLogChannelSelect)),
             None
         )
 
-        if select is None:
-            return
-
-        if select.selected_channel_id is None:
+        if select is None or select.selected_channel_id is None:
             await interaction.response.send_message(
                 "Please choose a channel first.",
                 ephemeral=True
@@ -1425,11 +1653,7 @@ class AuditLogChannelView(discord.ui.View):
             select.selected_channel_id
         )
 
-        view = ConfigView(
-            self.bot,
-            self.guild_id
-        )
-
+        view = ConfigView(self.bot, self.guild_id)
         await interaction.response.edit_message(
             content=None,
             embed=view.build_embed(),
@@ -1441,16 +1665,8 @@ class AuditLogChannelView(discord.ui.View):
         emoji="◀️",
         style=discord.ButtonStyle.secondary
     )
-    async def back(
-        self,
-        interaction: discord.Interaction,
-        button: discord.ui.Button
-    ):
-        view = ConfigEditView(
-            self.bot,
-            self.guild_id
-        )
-
+    async def back(self, interaction: discord.Interaction, button: discord.ui.Button):
+        view = ConfigEditView(self.bot, self.guild_id)
         await interaction.response.edit_message(
             content="**What would you like to configure?**",
             embed=None,
@@ -1468,23 +1684,17 @@ class AuditLogChannelSelect(discord.ui.ChannelSelect):
             placeholder="Choose the audit log channel...",
             min_values=1,
             max_values=1,
-            channel_types=[
-                discord.ChannelType.text
-            ]
+            channel_types=[discord.ChannelType.text]
         )
 
-    async def callback(
-        self,
-        interaction: discord.Interaction
-    ):
+    async def callback(self, interaction: discord.Interaction):
         self.selected_channel_id = self.values[0].id
-
         await interaction.response.edit_message(
             content=(
-                f"**Audit log channel selected:** "
-                f"{self.values[0].mention}\n\n"
+                f"**Audit log channel selected:** {self.values[0].mention}\n\n"
                 "Click **Save** to apply this change."
             ),
+            embed=None,
             view=self.view
         )
 
@@ -1492,7 +1702,6 @@ class AuditLogChannelSelect(discord.ui.ChannelSelect):
 class RulesMessageView(discord.ui.View):
     def __init__(self, bot, guild_id: int):
         super().__init__(timeout=300)
-
         self.bot = bot
         self.guild_id = guild_id
 
@@ -1501,16 +1710,9 @@ class RulesMessageView(discord.ui.View):
         emoji="📜",
         style=discord.ButtonStyle.primary
     )
-    async def enter_rules_message(
-        self,
-        interaction: discord.Interaction,
-        button: discord.ui.Button
-    ):
+    async def enter_rules_message(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(
-            RulesMessageModal(
-                self.bot,
-                self.guild_id
-            )
+            RulesMessageModal(self.bot, self.guild_id)
         )
 
     @discord.ui.button(
@@ -1518,16 +1720,8 @@ class RulesMessageView(discord.ui.View):
         emoji="◀️",
         style=discord.ButtonStyle.secondary
     )
-    async def back(
-        self,
-        interaction: discord.Interaction,
-        button: discord.ui.Button
-    ):
-        view = ConfigEditView(
-            self.bot,
-            self.guild_id
-        )
-
+    async def back(self, interaction: discord.Interaction, button: discord.ui.Button):
+        view = ConfigEditView(self.bot, self.guild_id)
         await interaction.response.edit_message(
             content="**What would you like to configure?**",
             embed=None,
@@ -1535,10 +1729,7 @@ class RulesMessageView(discord.ui.View):
         )
 
 
-class RulesMessageModal(
-    discord.ui.Modal,
-    title="Rules Message"
-):
+class RulesMessageModal(discord.ui.Modal, title="Rules Message"):
     message_link = discord.ui.TextInput(
         label="Discord message link",
         placeholder="https://discord.com/channels/...",
@@ -1548,16 +1739,11 @@ class RulesMessageModal(
 
     def __init__(self, bot, guild_id: int):
         super().__init__()
-
         self.bot = bot
         self.guild_id = guild_id
 
-    async def on_submit(
-        self,
-        interaction: discord.Interaction
-    ):
+    async def on_submit(self, interaction: discord.Interaction):
         link = self.message_link.value.strip()
-
         parts = link.rstrip("/").split("/")
 
         if len(parts) < 3:
@@ -1586,7 +1772,6 @@ class RulesMessageModal(
             return
 
         guild = interaction.guild
-
         if guild is None:
             await interaction.response.send_message(
                 "I couldn't determine which server this is.",
@@ -1595,7 +1780,6 @@ class RulesMessageModal(
             return
 
         channel = guild.get_channel(channel_id)
-
         if channel is None:
             await interaction.response.send_message(
                 "I couldn't find that channel in this server.",
@@ -1624,29 +1808,15 @@ class RulesMessageModal(
             )
             return
 
-        self.bot.database.set_config(
-            self.guild_id,
-            "rules_channel_id",
-            channel.id
-        )
+        self.bot.database.set_config(self.guild_id, "rules_channel_id", channel.id)
+        self.bot.database.set_config(self.guild_id, "rules_message_id", message.id)
 
-        self.bot.database.set_config(
-            self.guild_id,
-            "rules_message_id",
-            message.id
-        )
-
-        view = ConfigView(
-            self.bot,
-            self.guild_id
-        )
-
+        view = ConfigView(self.bot, self.guild_id)
         await interaction.response.edit_message(
             content=None,
             embed=view.build_embed(),
             view=view
         )
-
 
 
 class IcebreakerChannelView(discord.ui.View):
@@ -1676,11 +1846,7 @@ class IcebreakerChannelView(discord.ui.View):
         emoji="💾",
         style=discord.ButtonStyle.success
     )
-    async def save(
-        self,
-        interaction: discord.Interaction,
-        button: discord.ui.Button
-    ):
+    async def save(self, interaction: discord.Interaction, button: discord.ui.Button):
         if self.selected_channel_id is None:
             await interaction.response.send_message(
                 "Please choose a channel first.",
@@ -1694,7 +1860,7 @@ class IcebreakerChannelView(discord.ui.View):
             self.selected_channel_id
         )
 
-        view = ConfigView(self.bot, self.guild_id)
+        view = EntertainmentConfigView(self.bot, self.guild_id)
         await interaction.response.edit_message(
             content=None,
             embed=view.build_embed(),
@@ -1706,15 +1872,11 @@ class IcebreakerChannelView(discord.ui.View):
         emoji="◀️",
         style=discord.ButtonStyle.secondary
     )
-    async def back(
-        self,
-        interaction: discord.Interaction,
-        button: discord.ui.Button
-    ):
-        view = ConfigEditView(self.bot, self.guild_id)
+    async def back(self, interaction: discord.Interaction, button: discord.ui.Button):
+        view = EntertainmentConfigView(self.bot, self.guild_id)
         await interaction.response.edit_message(
-            content="**What would you like to configure?**",
-            embed=None,
+            content=None,
+            embed=view.build_embed(),
             view=view
         )
 
@@ -1730,7 +1892,6 @@ class IcebreakerChannelSelect(discord.ui.ChannelSelect):
 
     async def callback(self, interaction: discord.Interaction):
         self.view.selected_channel_id = self.values[0].id
-
         await interaction.response.edit_message(
             content=(
                 f"**Icebreaker channel selected:** {self.values[0].mention}\n\n"
@@ -1766,11 +1927,7 @@ class IcebreakerPostingTimeView(discord.ui.View):
         emoji="⏰",
         style=discord.ButtonStyle.primary
     )
-    async def set_posting_time(
-        self,
-        interaction: discord.Interaction,
-        button: discord.ui.Button
-    ):
+    async def set_posting_time(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(
             IcebreakerPostingTimeModal(self.bot, self.guild_id)
         )
@@ -1780,23 +1937,16 @@ class IcebreakerPostingTimeView(discord.ui.View):
         emoji="◀️",
         style=discord.ButtonStyle.secondary
     )
-    async def back(
-        self,
-        interaction: discord.Interaction,
-        button: discord.ui.Button
-    ):
-        view = ConfigEditView(self.bot, self.guild_id)
+    async def back(self, interaction: discord.Interaction, button: discord.ui.Button):
+        view = EntertainmentConfigView(self.bot, self.guild_id)
         await interaction.response.edit_message(
-            content="**What would you like to configure?**",
-            embed=None,
+            content=None,
+            embed=view.build_embed(),
             view=view
         )
 
 
-class IcebreakerPostingTimeModal(
-    discord.ui.Modal,
-    title="Icebreaker Posting Time"
-):
+class IcebreakerPostingTimeModal(discord.ui.Modal, title="Icebreaker Posting Time"):
     posting_time = discord.ui.TextInput(
         label="Posting time (24-hour HH:MM)",
         placeholder="09:00",
@@ -1890,11 +2040,7 @@ class IcebreakerEnabledView(discord.ui.View):
         custom_id="icebreaker_toggle",
         style=discord.ButtonStyle.primary
     )
-    async def toggle_icebreaker(
-        self,
-        interaction: discord.Interaction,
-        button: discord.ui.Button
-    ):
+    async def toggle_icebreaker(self, interaction: discord.Interaction, button: discord.ui.Button):
         config = self.bot.database.get_config(self.guild_id)
         currently_enabled = bool(config["icebreaker_enabled"])
         new_value = 0 if currently_enabled else 1
@@ -1906,7 +2052,6 @@ class IcebreakerEnabledView(discord.ui.View):
         )
 
         self.update_button()
-
         await interaction.response.edit_message(
             content=None,
             embed=self.build_embed(),
@@ -1918,14 +2063,10 @@ class IcebreakerEnabledView(discord.ui.View):
         emoji="◀️",
         style=discord.ButtonStyle.secondary
     )
-    async def back(
-        self,
-        interaction: discord.Interaction,
-        button: discord.ui.Button
-    ):
-        view = ConfigEditView(self.bot, self.guild_id)
+    async def back(self, interaction: discord.Interaction, button: discord.ui.Button):
+        view = EntertainmentConfigView(self.bot, self.guild_id)
         await interaction.response.edit_message(
-            content="**What would you like to configure?**",
-            embed=None,
+            content=None,
+            embed=view.build_embed(),
             view=view
         )
