@@ -25,6 +25,9 @@ class Birthdays(commands.Cog):
             if not config:
                 continue
 
+            if not config["birthdays_enabled"]:
+                continue
+
             birthday_channel_id = config["birthday_channel_id"]
 
             if not birthday_channel_id:
