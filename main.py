@@ -41,7 +41,6 @@ class Ratburn(commands.Bot):
         self.database = Database()
 
     async def setup_hook(self):
-        await self.load_extension("cogs.general")
         await self.load_extension("cogs.configuration")
         await self.load_extension("cogs.rat_trap")
         await self.load_extension("cogs.onboarding")
