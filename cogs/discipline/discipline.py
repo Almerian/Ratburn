@@ -8,6 +8,7 @@ from .thresholds import get_punishment_tier
 from .mute import issue_mute
 from .detention import DetentionManager
 from .ban import issue_ban
+from .discipline_view import DisciplineRecordView
 
 
 class Discipline(commands.Cog):
@@ -16,6 +17,7 @@ class Discipline(commands.Cog):
         self.detention = DetentionManager(bot)
 
 
+    
     @commands.hybrid_command(
         name="discipline",
         description="View or manage a member's discipline record."
@@ -79,45 +81,69 @@ class Discipline(commands.Cog):
             )
             return
 
-        records = self.bot.database.get_active_discipline_records(
-            ctx.guild.id,
-            name.id
+        database = self.bot.database
+        guild_id = ctx.guild.id
+        user_id = name.id
+
+        active_records = database.get_active_discipline_records(
+            guild_id,
+            user_id
         )
 
-        embed = discord.Embed(
-            title=f"⚖️ Discipline Record: {name.display_name}",
-            color=discord.Color.dark_gold()
+        retired_records = database.get_retired_discipline_records(
+            guild_id,
+            user_id
         )
 
-        embed.set_thumbnail(url=name.display_avatar.url)
-
-        if not records:
-            embed.description = (
-                f"{name.mention} has no active discipline records."
+        active_records = [
+            record
+            for record in active_records
+            if (
+                record["action"] != "demerit"
+                or is_demerit_active(record["expires_at"])
             )
+        ]
+
+        active_demerits = sum(
+            1
+            for record in active_records
+            if record["action"] == "demerit"
+        )
+
+        lifetime_demerits = database.get_lifetime_demerit_count(
+            guild_id,
+            user_id
+        )
+
+        discipline_config = database.get_discipline_config(
+            guild_id
+        )
+
+        if discipline_config is None:
+            punishment_tier = "Demerit"
         else:
-            for record in records:
-                action = record["action"].replace("_", " ").title()
-                reason = record["reason"] or "No reason provided."
-                created_at = record["created_at"]
-                expires_at = record["expires_at"]
+            punishment_tier = get_punishment_tier(
+                active_demerits,
+                discipline_config
+            )
 
-                value = (
-                    f"**Reason:** {reason}\n"
-                    f"**Issued:** {created_at}"
-                )
+            punishment_tier = str(
+                punishment_tier
+            ).replace("_", " ").title()
 
-                if expires_at:
-                    value += f"\n**Expires:** {expires_at}"
-
-                embed.add_field(
-                    name=f"#{record['id']} — {action}",
-                    value=value[:1024],
-                    inline=False
-                )
+        view = DisciplineRecordView(
+            owner_id=ctx.author.id,
+            member=name,
+            active_records=active_records,
+            retired_records=retired_records,
+            active_demerits=active_demerits,
+            lifetime_demerits=lifetime_demerits,
+            punishment_tier=punishment_tier,
+        )
 
         await ctx.send(
-            embed=embed,
+            embed=view.build_embed(),
+            view=view,
             ephemeral=True
         )
 
