@@ -42,6 +42,7 @@ class Ratburn(commands.Bot):
 
     async def setup_hook(self):
         await self.load_extension("cogs.configuration")
+        await self.load_extension("cogs.reaction_roles.reaction_roles")
         await self.load_extension("cogs.rat_trap")
         await self.load_extension("cogs.onboarding")
         await self.load_extension("cogs.new_member")
