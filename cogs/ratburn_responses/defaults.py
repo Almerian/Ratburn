@@ -208,7 +208,7 @@ RESPONSE_POOLS = {
         "triggers": [
             "hello",
             "hi",
-            "hey",
+            "heyo",
             "good morning",
             "good afternoon",
             "good evening",
