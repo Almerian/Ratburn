@@ -48,7 +48,7 @@ class ConfigView(discord.ui.View):
             return f"🟢 <@&{role_id}>" if role_id else "🔴 Not configured"
 
         def channel_value(channel_id):
-            return f"🟢 <#{channel_id}>" if channel_id else "🔴 Not configured"
+            return f"<#{channel_id}>" if channel_id else "🔴 Not configured"
 
         timezone = config["timezone"] or "Timezone not configured"
         posting_time = config["icebreaker_posting_time"] or "09:00"
@@ -229,6 +229,11 @@ class EntertainmentConfigView(discord.ui.View):
             inline=True
         )
         embed.add_field(
+            name="🐀 Ratburn Responses",
+            value=status("ratburn_responses_enabled"),
+            inline=True
+        )
+        embed.add_field(
             name="Icebreaker Channel",
             value=channel(config["icebreaker_channel_id"]),
             inline=True
@@ -246,11 +251,6 @@ class EntertainmentConfigView(discord.ui.View):
         embed.add_field(
             name="Event Channel",
             value=channel(config["event_channel_id"]),
-            inline=True
-        )
-        embed.add_field(
-            name="🐀 Ratburn Responses",
-            value=status("ratburn_responses_enabled"),
             inline=True
         )
 
