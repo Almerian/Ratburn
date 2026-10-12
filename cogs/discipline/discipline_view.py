@@ -25,8 +25,6 @@ class DisciplineRecordView(discord.ui.View):
         self.punishment_tier = punishment_tier
         self.page = 0
 
-        # Sort all records newest first, while keeping active and
-        # retired records distinguishable for display.
         self.records = [
             (record, False)
             for record in self.active_records
@@ -74,7 +72,7 @@ class DisciplineRecordView(discord.ui.View):
             reason = reason[:247] + "..."
 
         lines = [
-            f"**#{record['id']} — {action}**",
+            f"**#{action}**",
             f"Reason: {reason}",
             f"Issued: {record['created_at']}",
         ]
