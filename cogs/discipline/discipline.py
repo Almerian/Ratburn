@@ -15,20 +15,31 @@ class Discipline(commands.Cog):
         self.bot = bot
         self.detention = DetentionManager(bot)
 
-#==================================DO NOT REMOVE==================================
+
     @commands.hybrid_command(
-        name="discipline_clear",
-        description="Clear all discipline records for a user."
+        name="discipline",
+        description="View or manage a member's discipline record."
     )
     @app_commands.describe(
-        user="The user whose discipline records should be cleared."
+        name="The member whose discipline record you want to view or manage.",
+        clear="Clear all discipline records for this member.",
+        detain="Place this member in detention."
     )
     @app_commands.default_permissions(administrator=True)
-    async def discipline_clear(
+    async def discipline(
         self,
         ctx: commands.Context,
-        user: discord.Member
+        name: discord.Member,
+        clear: bool = False,
+        detain: bool = False
     ):
+        if ctx.guild is None:
+            await ctx.send(
+                "This command can only be used in a server.",
+                ephemeral=True
+            )
+            return
+
         if not ctx.author.guild_permissions.administrator:
             await ctx.send(
                 "Sorry, you need to be an administrator for that!",
@@ -36,45 +47,77 @@ class Discipline(commands.Cog):
             )
             return
 
-        self.bot.database.clear_discipline_records(
-            ctx.guild.id,
-            user.id
-        )
-
-        await ctx.send(
-            f"Cleared all discipline records for {user.mention}.",
-            ephemeral=True
-        )
-
-#==================================DO NOT REMOVE==================================
-    @commands.hybrid_command(
-        name="discipline_detain",
-        description="Place a user in detention for testing."
-    )
-    @app_commands.describe(
-        user="The user to place in detention."
-    )
-    @app_commands.default_permissions(administrator=True)
-    async def discipline_detain(
-        self,
-        ctx: commands.Context,
-        user: discord.Member
-    ):
-        if not ctx.author.guild_permissions.administrator:
+        if clear and detain:
             await ctx.send(
-                "Sorry, you need to be an administrator for that!",
+                "Please choose either `clear` or `detain`, not both.",
                 ephemeral=True
             )
             return
 
-        success, message = await self.detention.issue_detention(
+        if clear:
+            self.bot.database.clear_discipline_records(
+                ctx.guild.id,
+                name.id
+            )
+
+            await ctx.send(
+                f"Cleared all discipline records for {name.mention}.",
+                ephemeral=True
+            )
+            return
+
+        if detain:
+            success, message = await self.detention.issue_detention(
+                ctx.guild.id,
+                name.id,
+                "manual"
+            )
+
+            await ctx.send(
+                message,
+                ephemeral=True
+            )
+            return
+
+        records = self.bot.database.get_active_discipline_records(
             ctx.guild.id,
-            user.id,
-            "manual_test"
+            name.id
         )
 
+        embed = discord.Embed(
+            title=f"⚖️ Discipline Record: {name.display_name}",
+            color=discord.Color.dark_gold()
+        )
+
+        embed.set_thumbnail(url=name.display_avatar.url)
+
+        if not records:
+            embed.description = (
+                f"{name.mention} has no active discipline records."
+            )
+        else:
+            for record in records:
+                action = record["action"].replace("_", " ").title()
+                reason = record["reason"] or "No reason provided."
+                created_at = record["created_at"]
+                expires_at = record["expires_at"]
+
+                value = (
+                    f"**Reason:** {reason}\n"
+                    f"**Issued:** {created_at}"
+                )
+
+                if expires_at:
+                    value += f"\n**Expires:** {expires_at}"
+
+                embed.add_field(
+                    name=f"#{record['id']} — {action}",
+                    value=value[:1024],
+                    inline=False
+                )
+
         await ctx.send(
-            message,
+            embed=embed,
             ephemeral=True
         )
 
