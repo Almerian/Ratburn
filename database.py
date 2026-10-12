@@ -10,6 +10,7 @@ class Database:
         DATABASE_PATH.parent.mkdir(parents=True, exist_ok=True)
 
         self.connection = sqlite3.connect(DATABASE_PATH)
+        self.connection.execute("PRAGMA foreign_keys = ON")
         self.connection.row_factory = sqlite3.Row
 
         self.initialize()
