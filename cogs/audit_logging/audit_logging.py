@@ -95,6 +95,12 @@ class AuditLogging(commands.Cog):
         if audit_channel is None:
             return
 
+        if channel is not None and channel.id == audit_channel.id:
+            return
+
+        if message is not None and message.author.bot:
+            return
+
         if message is not None:
             author = message.author
             content = message.content or "*[No text content]*"
