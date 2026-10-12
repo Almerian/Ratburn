@@ -1,6 +1,7 @@
 import discord
 from discord.ui import Button, Modal, TextInput, View
 
+from cogs.reaction_roles.views.role_editor import RoleEditorView
 
 class PostDetailsModal(Modal):
 
@@ -178,13 +179,30 @@ class PostEditorView(View):
             content=(
                 f"Draft saved successfully! **Post ID:** `{post_id}`\n"
                 f"**Channel:** {channel.mention}\n\n"
-                "Next, we'll add the role entries and publishing controls."
+                "You can now configure its role entries."
             ),
             embed=self.create_embed(),
             view=self,
         )
 
         self.stop()
+
+        await interaction.followup.send(
+            embed=discord.Embed(
+                title="Configure a role",
+                description=(
+                    "Choose or create a role, configure its reaction "
+                    "and description, then save the entry."
+                ),
+                color=discord.Color.dark_teal(),
+            ),
+            view=RoleEditorView(
+                bot=self.bot,
+                guild_id=self.guild_id,
+                post_id=post_id,
+            ),
+            ephemeral=True,
+        )
 
     @discord.ui.button(
         label="Cancel",
