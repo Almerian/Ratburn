@@ -27,6 +27,9 @@ class Events(commands.Cog):
             if not config:
                 continue
 
+            if not config["events_enabled"]:
+                continue
+
             event_channel_id = config["event_channel_id"]
 
             if not event_channel_id:
