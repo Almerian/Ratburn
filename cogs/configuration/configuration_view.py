@@ -199,6 +199,7 @@ class EntertainmentConfigView(discord.ui.View):
 
         timezone = config["timezone"] or "Timezone not configured"
         posting_time = config["icebreaker_posting_time"] or "09:00"
+        quiz_posting_time = config["quiz_posting_time"] or "10:00"
 
         embed = discord.Embed(
             title="🎉 Entertainment Configuration",
@@ -210,7 +211,10 @@ class EntertainmentConfigView(discord.ui.View):
 
         embed.add_field(
             name="🧠 Daily Quiz",
-            value=status("quiz_enabled"),
+            value=(
+                f"{status('quiz_enabled')}\n"
+                f"Posting Time: **{quiz_posting_time}**"
+            ),
             inline=True
         )
         embed.add_field(
@@ -287,6 +291,11 @@ class EntertainmentSettingSelect(discord.ui.Select):
                 emoji="🧠"
             ),
             discord.SelectOption(
+                label="Daily Quiz Posting Time",
+                value="quiz_posting_time",
+                emoji="⏰"
+            ),
+            discord.SelectOption(
                 label="Icebreaker On/Off",
                 value="icebreaker_enabled",
                 emoji="📚"
@@ -340,7 +349,7 @@ class EntertainmentSettingSelect(discord.ui.Select):
             "quiz_enabled": (
                 "Daily Quiz",
                 "🧠",
-                "The daily quiz will be posted at 10:00 AM "
+                "The daily quiz will be posted at the configured time "
                 "in this server's timezone."
             ),
             "icebreaker_enabled": (
@@ -389,6 +398,10 @@ class EntertainmentSettingSelect(discord.ui.Select):
             return
 
         channel_views = {
+            "quiz_posting_time": (
+                QuizPostingTimeView,
+                "Choose when the Daily Quiz should be posted."
+            ),
             "icebreaker_channel_id": (
                 IcebreakerChannelView,
                 "Choose the channel for daily Icebreakers."
@@ -2085,4 +2098,108 @@ class IcebreakerEnabledView(discord.ui.View):
             content=None,
             embed=view.build_embed(),
             view=view
+        )
+
+
+class QuizPostingTimeView(discord.ui.View):
+    def __init__(self, bot, guild_id: int):
+        super().__init__(timeout=300)
+        self.bot = bot
+        self.guild_id = guild_id
+
+    def build_embed(self):
+        config = self.bot.database.get_config(self.guild_id)
+        posting_time = config["quiz_posting_time"] or "10:00"
+        timezone = config["timezone"] or "Timezone not configured"
+
+        return discord.Embed(
+            title="⏰ Daily Quiz Posting Time",
+            description=(
+                f"Current posting time: **{posting_time}**\n"
+                f"Server timezone: **{timezone}**\n\n"
+                "Use 24-hour time in `HH:MM` format, "
+                "such as `09:00` or `18:30`."
+            )
+        )
+
+    @discord.ui.button(
+        label="Set Posting Time",
+        emoji="⏰",
+        style=discord.ButtonStyle.primary
+    )
+    async def set_posting_time(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+        await interaction.response.send_modal(
+            QuizPostingTimeModal(self.bot, self.guild_id)
+        )
+
+    @discord.ui.button(
+        label="Back",
+        emoji="◀️",
+        style=discord.ButtonStyle.secondary
+    )
+    async def back(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+        view = EntertainmentConfigView(self.bot, self.guild_id)
+
+        await interaction.response.edit_message(
+            content=None,
+            embed=view.build_embed(),
+            view=view
+        )
+
+
+class QuizPostingTimeModal(
+    discord.ui.Modal,
+    title="Daily Quiz Posting Time"
+):
+    posting_time = discord.ui.TextInput(
+        label="Posting time (24-hour HH:MM)",
+        placeholder="10:00",
+        required=True,
+        min_length=5,
+        max_length=5
+    )
+
+    def __init__(self, bot, guild_id: int):
+        super().__init__()
+        self.bot = bot
+        self.guild_id = guild_id
+
+    async def on_submit(self, interaction: discord.Interaction):
+        value = self.posting_time.value.strip()
+
+        try:
+            parsed_time = datetime.strptime(value, "%H:%M")
+        except ValueError:
+            await interaction.response.send_message(
+                "Invalid time. Please use 24-hour `HH:MM` format, "
+                "for example `09:00` or `18:30`.",
+                ephemeral=True
+            )
+            return
+
+        if parsed_time.strftime("%H:%M") != value:
+            await interaction.response.send_message(
+                "Please enter the time in `HH:MM` format, "
+                "for example `09:00` or `18:30`.",
+                ephemeral=True
+            )
+            return
+
+        self.bot.database.set_config(
+            self.guild_id,
+            "quiz_posting_time",
+            value
+        )
+
+        await interaction.response.send_message(
+            f"✅ Daily Quiz posting time saved as **{value}**.",
+            ephemeral=True
         )
