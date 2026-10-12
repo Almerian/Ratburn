@@ -199,7 +199,15 @@ class AuditLogging(commands.Cog):
             discord.HTTPException
         ):
             return
+    
+    @commands.Cog.listener()
+    async def on_message_edit(self, before, after):
+        self.cache_message(after)
 
+    @commands.Cog.listener()
+    async def on_message_delete(self, message):
+        self.message_cache.pop(message.id, None)
+        
     @commands.Cog.listener()
     async def on_raw_message_delete(
         self,
@@ -221,6 +229,9 @@ class AuditLogging(commands.Cog):
             message = self.message_cache.get(payload.message_id)
 
         self.message_cache.pop(payload.message_id, None)
+        
+        if message is not None and message.author.id == self.bot.user.id:
+            return
 
         await self.log_deleted_message(
             guild=guild,
