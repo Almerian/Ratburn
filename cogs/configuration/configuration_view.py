@@ -184,81 +184,100 @@ class EntertainmentConfigView(discord.ui.View):
             EntertainmentSettingSelect(bot, guild_id)
         )
 
+
     def build_embed(self):
         config = self.bot.database.get_config(self.guild_id)
-
+        embed = discord.Embed(
+            title="🎛️ Entertainment Configuration",
+            description="Manage Ratburn's entertainment features."
+        )
+    
         def status(key):
-            return "🟢 Enabled" if config[key] else "🔴 Disabled"
-
+            return (
+                "🟢 Enabled"
+                if config[key]
+                else "🔴 Disabled"
+            )
+    
         def channel(channel_id):
             return (
                 f"<#{channel_id}>"
                 if channel_id
                 else "Not configured"
             )
-
+    
         timezone = config["timezone"] or "Timezone not configured"
-        posting_time = config["icebreaker_posting_time"] or "09:00"
-        quiz_posting_time = config["quiz_posting_time"] or "10:00"
-
-        embed = discord.Embed(
-            title="🎉 Entertainment Configuration",
-            description=(
-                "Manage Ratburn's scheduled entertainment features. "
-                "Each feature can be enabled or disabled independently."
-            )
-        )
-
+    
+        quiz_enabled = bool(config["quiz_enabled"])
+        quiz_value = status("quiz_enabled")
+    
+        if quiz_enabled:
+            quiz_posting_time = config["quiz_posting_time"] or "10:00"
+            quiz_value += f"\nPosting Time: **{quiz_posting_time}**"
+    
         embed.add_field(
             name="🧠 Daily Quiz",
-            value=(
-                f"{status('quiz_enabled')}\n"
-                f"Posting Time: **{quiz_posting_time}**"
-            ),
-            inline=True
+            value=quiz_value,
+            inline=False
         )
+    
+        icebreaker_enabled = bool(config["icebreaker_enabled"])
+        icebreaker_value = status("icebreaker_enabled")
+    
+        if icebreaker_enabled:
+            icebreaker_posting_time = (
+                config["icebreaker_posting_time"] or "09:00"
+            )
+            icebreaker_channel_id = config["icebreaker_channel_id"]
+    
+            icebreaker_value += (
+                f"\nChannel: {channel(icebreaker_channel_id)}"
+                f"\nPosting Time: **{icebreaker_posting_time}**"
+                f"\nTimezone: **{timezone}**"
+            )
+    
         embed.add_field(
             name="📚 Daily Icebreaker",
-            value=status("icebreaker_enabled"),
-            inline=True
+            value=icebreaker_value,
+            inline=False
         )
+    
+        birthdays_enabled = bool(config["birthdays_enabled"])
+        birthdays_value = status("birthdays_enabled")
+    
+        if birthdays_enabled:
+            birthdays_value += (
+                f"\nChannel: {channel(config['birthday_channel_id'])}"
+            )
+    
         embed.add_field(
             name="🎂 Birthdays",
-            value=status("birthdays_enabled"),
-            inline=True
+            value=birthdays_value,
+            inline=False
         )
+    
+        events_enabled = bool(config["events_enabled"])
+        events_value = status("events_enabled")
+    
+        if events_enabled:
+            events_value += (
+                f"\nChannel: {channel(config['event_channel_id'])}"
+            )
+    
         embed.add_field(
             name="📅 Events",
-            value=status("events_enabled"),
-            inline=True
+            value=events_value,
+            inline=False
         )
+    
         embed.add_field(
             name="🐀 Ratburn Responses",
             value=status("ratburn_responses_enabled"),
-            inline=True
+            inline=False
         )
-        embed.add_field(
-            name="Icebreaker Channel",
-            value=channel(config["icebreaker_channel_id"]),
-            inline=True
-        )
-        embed.add_field(
-            name="Icebreaker Posting Time",
-            value=f"{posting_time} ({timezone})",
-            inline=True
-        )
-        embed.add_field(
-            name="Birthday Channel",
-            value=channel(config["birthday_channel_id"]),
-            inline=True
-        )
-        embed.add_field(
-            name="Event Channel",
-            value=channel(config["event_channel_id"]),
-            inline=True
-        )
-
+    
         return embed
+
 
     @discord.ui.button(
         label="Back to Configuration",
