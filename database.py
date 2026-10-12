@@ -496,6 +496,48 @@ class Database:
             user_id
         )).fetchall()
 
+    
+    def get_retired_discipline_records(
+        self,
+        guild_id: int,
+        user_id: int
+    ):
+        """Return completed, expired, or otherwise retired records."""
+        return self.connection.execute("""
+            SELECT *
+            FROM discipline
+            WHERE guild_id = ?
+            AND user_id = ?
+            AND (
+                status != 'active'
+                OR (
+                    expires_at IS NOT NULL
+                    AND datetime(expires_at) <= datetime('now')
+                )
+            )
+            ORDER BY created_at DESC
+        """, (
+            guild_id,
+            user_id
+        )).fetchall()
+
+    def get_lifetime_demerit_count(
+        self,
+        guild_id: int,
+        user_id: int
+    ) -> int:
+        """Count all currently stored demerit records, regardless of status."""
+        return self.connection.execute("""
+            SELECT COUNT(*)
+            FROM discipline
+            WHERE guild_id = ?
+            AND user_id = ?
+            AND action = 'demerit'
+        """, (
+            guild_id,
+            user_id
+        )).fetchone()[0]
+
     def mark_expired_detentions(self):
         self.connection.execute("""
             UPDATE discipline
