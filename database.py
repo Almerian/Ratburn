@@ -240,6 +240,38 @@ class Database:
             )
         """)
 
+        self.connection.execute("""
+            CREATE TABLE IF NOT EXISTS reaction_role_posts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                guild_id INTEGER NOT NULL,
+                channel_id INTEGER NOT NULL,
+                message_id INTEGER,
+                title TEXT NOT NULL DEFAULT 'Choose your roles!',
+                description TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        self.connection.execute("""
+            CREATE TABLE IF NOT EXISTS reaction_role_entries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                post_id INTEGER NOT NULL,
+                role_id INTEGER NOT NULL,
+                emoji TEXT NOT NULL,
+                description TEXT NOT NULL DEFAULT '',
+                position INTEGER NOT NULL DEFAULT 0,
+                role_color INTEGER,
+                channel_permissions TEXT,
+
+                FOREIGN KEY (post_id)
+                    REFERENCES reaction_role_posts(id)
+                    ON DELETE CASCADE,
+
+                UNIQUE (post_id, role_id),
+                UNIQUE (post_id, emoji)
+            )
+        """)
         
         self.migrate_quiz_tables()
 
@@ -998,6 +1030,186 @@ class Database:
             posted_date
         )).fetchone() is not None
 
+    def create_reaction_role_post(
+        self,
+        guild_id: int,
+        channel_id: int,
+        title: str = "Choose your roles!",
+        description: str = "",
+    ) -> int:
+        cursor = self.connection.execute("""
+            INSERT INTO reaction_role_posts (
+                guild_id,
+                channel_id,
+                title,
+                description
+            )
+            VALUES (?, ?, ?, ?)
+        """, (
+            guild_id,
+            channel_id,
+            title,
+            description,
+        ))
+
+        self.connection.commit()
+        return cursor.lastrowid
+
+    def get_reaction_role_posts(self, guild_id: int):
+        return self.connection.execute("""
+            SELECT *
+            FROM reaction_role_posts
+            WHERE guild_id = ?
+            ORDER BY id DESC
+        """, (guild_id,)).fetchall()
+
+    def get_reaction_role_post(self, post_id: int):
+        return self.connection.execute("""
+            SELECT *
+            FROM reaction_role_posts
+            WHERE id = ?
+        """, (post_id,)).fetchone()
+
+    def update_reaction_role_post(
+        self,
+        post_id: int,
+        setting: str,
+        value,
+    ):
+        allowed_settings = {
+            "guild_id",
+            "channel_id",
+            "message_id",
+            "title",
+            "description",
+        }
+
+        if setting not in allowed_settings:
+            raise ValueError(
+                f"Invalid reaction-role post setting: {setting}"
+            )
+
+        self.connection.execute(
+            f"""
+            UPDATE reaction_role_posts
+            SET {setting} = ?,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            (value, post_id),
+        )
+        self.connection.commit()
+
+    def delete_reaction_role_post(self, post_id: int):
+        self.connection.execute("""
+            DELETE FROM reaction_role_posts
+            WHERE id = ?
+        """, (post_id,))
+        self.connection.commit()
+
+    def add_reaction_role_entry(
+        self,
+        post_id: int,
+        role_id: int,
+        emoji: str,
+        description: str = "",
+        position: int = 0,
+        role_color: int | None = None,
+        channel_permissions: str | None = None,
+    ) -> int:
+        cursor = self.connection.execute("""
+            INSERT INTO reaction_role_entries (
+                post_id,
+                role_id,
+                emoji,
+                description,
+                position,
+                role_color,
+                channel_permissions
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (
+            post_id,
+            role_id,
+            emoji,
+            description,
+            position,
+            role_color,
+            channel_permissions,
+        ))
+
+        self.connection.commit()
+        return cursor.lastrowid
+
+    def get_reaction_role_entries(self, post_id: int):
+        return self.connection.execute("""
+            SELECT *
+            FROM reaction_role_entries
+            WHERE post_id = ?
+            ORDER BY position ASC, id ASC
+        """, (post_id,)).fetchall()
+
+    def get_reaction_role_entry_by_emoji(
+        self,
+        post_id: int,
+        emoji: str,
+    ):
+        return self.connection.execute("""
+            SELECT *
+            FROM reaction_role_entries
+            WHERE post_id = ?
+            AND emoji = ?
+        """, (post_id, emoji)).fetchone()
+
+    def get_reaction_role_entry_by_role(
+        self,
+        post_id: int,
+        role_id: int,
+    ):
+        return self.connection.execute("""
+            SELECT *
+            FROM reaction_role_entries
+            WHERE post_id = ?
+            AND role_id = ?
+        """, (post_id, role_id)).fetchone()
+
+    def update_reaction_role_entry(
+        self,
+        entry_id: int,
+        setting: str,
+        value,
+    ):
+        allowed_settings = {
+            "role_id",
+            "emoji",
+            "description",
+            "position",
+            "role_color",
+            "channel_permissions",
+        }
+
+        if setting not in allowed_settings:
+            raise ValueError(
+                f"Invalid reaction-role entry setting: {setting}"
+            )
+
+        self.connection.execute(
+            f"""
+            UPDATE reaction_role_entries
+            SET {setting} = ?
+            WHERE id = ?
+            """,
+            (value, entry_id),
+        )
+        self.connection.commit()
+
+    def delete_reaction_role_entry(self, entry_id: int):
+        self.connection.execute("""
+            DELETE FROM reaction_role_entries
+            WHERE id = ?
+        """, (entry_id,))
+        self.connection.commit()
+    
 
     def close(self):
         self.connection.close()
