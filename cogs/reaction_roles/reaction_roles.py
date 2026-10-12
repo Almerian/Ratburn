@@ -1,9 +1,12 @@
-
 import logging
 
 import discord
 from discord.ext import commands
 
+from cogs.reaction_roles.views.dashboard import (
+    ReactionRolesDashboardView,
+    create_dashboard_embed,
+)
 
 logger = logging.getLogger("ratburn.reaction_roles")
 
@@ -113,6 +116,28 @@ class ReactionRoles(commands.Cog):
                 member.id,
                 guild.id,
             )
+
+    @discord.app_commands.command(
+        name="reaction_roles",
+        description="Open the reaction-role management dashboard.",
+    )
+    @discord.app_commands.default_permissions(manage_roles=True)
+    async def reaction_roles_dashboard(
+        self,
+        interaction: discord.Interaction,
+    ):
+        if interaction.guild is None:
+            await interaction.response.send_message(
+                "This command can only be used in a server.",
+                ephemeral=True,
+            )
+            return
+
+        await interaction.response.send_message(
+            embed=create_dashboard_embed(),
+            view=ReactionRolesDashboardView(self.bot),
+            ephemeral=True,
+        )
 
     @commands.Cog.listener()
     async def on_raw_reaction_add(
