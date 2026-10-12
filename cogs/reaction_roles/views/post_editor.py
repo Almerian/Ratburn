@@ -1,4 +1,3 @@
-
 import discord
 from discord.ui import Button, Modal, TextInput, View
 
@@ -32,7 +31,6 @@ class PostDetailsModal(Modal):
         self.editor.title = self.post_title.value.strip()
         self.editor.description = self.post_description.value.strip()
 
-        # Update the original editor message.
         if self.editor.message is not None:
             await self.editor.message.edit(
                 embed=self.editor.create_embed(),
@@ -87,7 +85,9 @@ class PostEditorView(View):
         embed.set_footer(text="Mr. Ratburn • Reaction-Role Editor")
         return embed
 
-    @discord.ui.channel_select(
+    
+    @discord.ui.select(
+        cls=discord.ui.ChannelSelect,
         placeholder="Choose the destination channel",
         channel_types=[discord.ChannelType.text],
         min_values=1,
