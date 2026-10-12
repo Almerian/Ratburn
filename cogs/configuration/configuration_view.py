@@ -248,6 +248,11 @@ class EntertainmentConfigView(discord.ui.View):
             value=channel(config["event_channel_id"]),
             inline=True
         )
+        embed.add_field(
+            name="🐀 Ratburn Responses",
+            value=status("ratburn_responses_enabled"),
+            inline=True
+        )
 
         return embed
 
@@ -316,6 +321,11 @@ class EntertainmentSettingSelect(discord.ui.Select):
                 value="event_channel_id",
                 emoji="📅"
             ),
+            discord.SelectOption(
+                label="Ratburn Responses On/Off",
+                value="ratburn_responses_enabled",
+                emoji="🐀"
+            ),
         ]
 
         super().__init__(
@@ -350,6 +360,12 @@ class EntertainmentSettingSelect(discord.ui.Select):
                 "📅",
                 "Event reminders and start announcements "
                 "will run for this server."
+            ),
+            "ratburn_responses_enabled": (
+                "Ratburn Responses",
+                "🐀",
+                "Ratburn will automatically respond to configured words "
+                "and phrases in this server."
             ),
         }
 
