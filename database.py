@@ -34,7 +34,8 @@ class Database:
                 icebreaker_channel_id INTEGER,
                 icebreaker_enabled INTEGER NOT NULL DEFAULT 1,
                 icebreaker_posting_time TEXT NOT NULL DEFAULT '09:00',
-                quiz_enabled INTEGER NOT NULL DEFAULT 1
+                quiz_enabled INTEGER NOT NULL DEFAULT 1,
+                ratburn_responses_enabled INTEGER NOT NULL DEFAULT 1
             )
         """)
 
@@ -63,6 +64,7 @@ class Database:
             "icebreaker_enabled": "INTEGER NOT NULL DEFAULT 1",
             "icebreaker_posting_time": "TEXT NOT NULL DEFAULT '09:00'",
             "quiz_enabled": "INTEGER NOT NULL DEFAULT 1",
+            "ratburn_responses_enabled": "INTEGER NOT NULL DEFAULT 1",
         }
 
         for column, column_type in new_columns.items():
@@ -370,6 +372,7 @@ class Database:
             "icebreaker_enabled",
             "icebreaker_posting_time",
             "quiz_enabled",
+            "ratburn_responses_enabled",
         }
 
         if setting not in allowed_settings:
