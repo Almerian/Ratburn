@@ -26,7 +26,7 @@ class Database:
                 birthday_channel_id INTEGER,
                 birthdays_enabled INTEGER NOT NULL DEFAULT 1,
                 event_channel_id INTEGER,
-                events_enabled INTEGER NOT NULL DEFAULT 1
+                events_enabled INTEGER NOT NULL DEFAULT 1,
                 audit_log_channel_id INTEGER,
                 timezone TEXT,
                 rules_channel_id INTEGER,
