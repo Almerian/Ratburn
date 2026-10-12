@@ -1,6 +1,8 @@
 import discord
 from discord.ui import View, Button
 
+from cogs.reaction_roles.views.post_editor import PostEditorView
+
 
 class ReactionRolesDashboardView(View):
 
@@ -42,11 +44,25 @@ class ReactionRolesDashboardView(View):
         interaction: discord.Interaction,
         button: Button,
     ):
+        if interaction.guild is None:
+            await interaction.response.send_message(
+                "This dashboard can only be used in a server.",
+                ephemeral=True,
+            )
+            return
+
+        editor = PostEditorView(
+            bot=self.bot,
+            guild_id=interaction.guild.id,
+        )
+
         await interaction.response.send_message(
-            "The post editor hasn't been connected yet. "
-            "We'll add that next!",
+            embed=editor.create_embed(),
+            view=editor,
             ephemeral=True,
         )
+
+        editor.message = await interaction.original_response()
 
     @discord.ui.button(
         label="Manage existing posts",
