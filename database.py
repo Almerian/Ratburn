@@ -241,21 +241,34 @@ class Database:
             )
         """)
 
+        
+        # ======================================
         self.connection.execute("""
-            CREATE TABLE IF NOT EXISTS reaction_role_posts (
+            DROP TABLE IF EXISTS reaction_role_entries
+        """)
+
+        self.connection.execute("""
+            DROP TABLE IF EXISTS reaction_role_posts
+        """)
+
+        self.connection.execute("""
+            CREATE TABLE reaction_role_posts (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 guild_id INTEGER NOT NULL,
                 channel_id INTEGER NOT NULL,
                 message_id INTEGER,
                 title TEXT NOT NULL DEFAULT 'Choose your roles!',
                 description TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'draft'
+                    CHECK (status IN ('draft', 'published')),
+                draft_expires_at TEXT,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
         """)
 
         self.connection.execute("""
-            CREATE TABLE IF NOT EXISTS reaction_role_entries (
+            CREATE TABLE reaction_role_entries (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 post_id INTEGER NOT NULL,
                 role_id INTEGER NOT NULL,
@@ -273,6 +286,7 @@ class Database:
                 UNIQUE (post_id, emoji)
             )
         """)
+        # ======================================
         
         self.migrate_quiz_tables()
 
@@ -1031,32 +1045,53 @@ class Database:
             posted_date
         )).fetchone() is not None
 
+
     def create_reaction_role_post(
         self,
         guild_id: int,
         channel_id: int,
         title: str = "Choose your roles!",
         description: str = "",
+        status: str = "draft",
     ) -> int:
+        if status not in {"draft", "published"}:
+            raise ValueError("Invalid reaction-role post status.")
+
+        expires_at = (
+            "14 days" if status == "draft" else None
+        )
+
         cursor = self.connection.execute("""
             INSERT INTO reaction_role_posts (
                 guild_id,
                 channel_id,
                 title,
-                description
+                description,
+                status,
+                draft_expires_at
             )
-            VALUES (?, ?, ?, ?)
+            VALUES (
+                ?, ?, ?, ?, ?,
+                CASE
+                    WHEN ? IS NOT NULL
+                    THEN datetime('now', '+14 days')
+                    ELSE NULL
+                END
+            )
         """, (
             guild_id,
             channel_id,
             title,
             description,
+            status,
+            expires_at,
         ))
 
         self.connection.commit()
         return cursor.lastrowid
 
     def get_reaction_role_posts(self, guild_id: int):
+        """Return all posts for a server, newest first."""
         return self.connection.execute("""
             SELECT *
             FROM reaction_role_posts
@@ -1076,7 +1111,117 @@ class Database:
             SELECT *
             FROM reaction_role_posts
             WHERE message_id = ?
+            AND status = 'published'
         """, (message_id,)).fetchone()
+
+    def get_reaction_role_drafts(self, guild_id: int):
+        """Return unexpired drafts for a server."""
+        self.delete_expired_reaction_role_drafts()
+
+        return self.connection.execute("""
+            SELECT *
+            FROM reaction_role_posts
+            WHERE guild_id = ?
+            AND status = 'draft'
+            ORDER BY updated_at DESC, id DESC
+        """, (guild_id,)).fetchall()
+
+    def save_reaction_role_draft(
+        self,
+        post_id: int | None,
+        guild_id: int,
+        channel_id: int,
+        title: str,
+        description: str,
+    ) -> int:
+        """Create a draft or update an existing draft, refreshing expiry."""
+        if post_id is None:
+            cursor = self.connection.execute("""
+                INSERT INTO reaction_role_posts (
+                    guild_id,
+                    channel_id,
+                    title,
+                    description,
+                    status,
+                    draft_expires_at
+                )
+                VALUES (
+                    ?, ?, ?, ?, 'draft',
+                    datetime('now', '+14 days')
+                )
+            """, (
+                guild_id,
+                channel_id,
+                title,
+                description,
+            ))
+
+            saved_id = cursor.lastrowid
+
+        else:
+            cursor = self.connection.execute("""
+                UPDATE reaction_role_posts
+                SET channel_id = ?,
+                    title = ?,
+                    description = ?,
+                    status = 'draft',
+                    draft_expires_at = datetime('now', '+14 days'),
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+                AND guild_id = ?
+                AND status = 'draft'
+            """, (
+                channel_id,
+                title,
+                description,
+                post_id,
+                guild_id,
+            ))
+
+            if cursor.rowcount == 0:
+                raise ValueError(
+                    "Draft not found, expired, or no longer editable."
+                )
+
+            saved_id = post_id
+
+        self.connection.commit()
+        return saved_id
+
+    def publish_reaction_role_post_record(
+        self,
+        post_id: int,
+        guild_id: int,
+        channel_id: int,
+        message_id: int,
+        title: str,
+        description: str,
+    ):
+        """Mark a post as published after Discord confirms publication."""
+        cursor = self.connection.execute("""
+            UPDATE reaction_role_posts
+            SET channel_id = ?,
+                message_id = ?,
+                title = ?,
+                description = ?,
+                status = 'published',
+                draft_expires_at = NULL,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            AND guild_id = ?
+        """, (
+            channel_id,
+            message_id,
+            title,
+            description,
+            post_id,
+            guild_id,
+        ))
+
+        if cursor.rowcount == 0:
+            raise ValueError("Reaction-role post not found.")
+
+        self.connection.commit()
 
     def update_reaction_role_post(
         self,
@@ -1108,11 +1253,125 @@ class Database:
         )
         self.connection.commit()
 
+    def delete_expired_reaction_role_drafts(self):
+        """Delete drafts whose 14-day timer has elapsed."""
+        self.connection.execute("""
+            DELETE FROM reaction_role_posts
+            WHERE status = 'draft'
+            AND draft_expires_at IS NOT NULL
+            AND datetime(draft_expires_at) <= datetime('now')
+        """)
+        self.connection.commit()
+
     def delete_reaction_role_post(self, post_id: int):
         self.connection.execute("""
             DELETE FROM reaction_role_posts
             WHERE id = ?
         """, (post_id,))
+        self.connection.commit()
+
+
+    def add_reaction_role_entry(
+        self,
+        post_id: int,
+        role_id: int,
+        emoji: str,
+        description: str = "",
+        position: int = 0,
+        role_color: int | None = None,
+        channel_permissions: str | None = None,
+    ) -> int:
+        cursor = self.connection.execute("""
+            INSERT INTO reaction_role_entries (
+                post_id,
+                role_id,
+                emoji,
+                description,
+                position,
+                role_color,
+                channel_permissions
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (
+            post_id,
+            role_id,
+            emoji,
+            description,
+            position,
+            role_color,
+            channel_permissions,
+        ))
+
+        self.connection.commit()
+        return cursor.lastrowid
+
+    def get_reaction_role_entries(self, post_id: int):
+        return self.connection.execute("""
+            SELECT *
+            FROM reaction_role_entries
+            WHERE post_id = ?
+            ORDER BY position ASC, id ASC
+        """, (post_id,)).fetchall()
+
+    def get_reaction_role_entry_by_emoji(
+        self,
+        post_id: int,
+        emoji: str,
+    ):
+        return self.connection.execute("""
+            SELECT *
+            FROM reaction_role_entries
+            WHERE post_id = ?
+            AND emoji = ?
+        """, (post_id, emoji)).fetchone()
+
+    def get_reaction_role_entry_by_role(
+        self,
+        post_id: int,
+        role_id: int,
+    ):
+        return self.connection.execute("""
+            SELECT *
+            FROM reaction_role_entries
+            WHERE post_id = ?
+            AND role_id = ?
+        """, (post_id, role_id)).fetchone()
+
+    def update_reaction_role_entry(
+        self,
+        entry_id: int,
+        setting: str,
+        value,
+    ):
+        allowed_settings = {
+            "role_id",
+            "emoji",
+            "description",
+            "position",
+            "role_color",
+            "channel_permissions",
+        }
+
+        if setting not in allowed_settings:
+            raise ValueError(
+                f"Invalid reaction-role entry setting: {setting}"
+            )
+
+        self.connection.execute(
+            f"""
+            UPDATE reaction_role_entries
+            SET {setting} = ?
+            WHERE id = ?
+            """,
+            (value, entry_id),
+        )
+        self.connection.commit()
+
+    def delete_reaction_role_entry(self, entry_id: int):
+        self.connection.execute("""
+            DELETE FROM reaction_role_entries
+            WHERE id = ?
+        """, (entry_id,))
         self.connection.commit()
 
     def add_reaction_role_entry(
