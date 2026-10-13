@@ -1,11 +1,24 @@
 import discord
 from discord.ui import Button, View
 
+from cogs.reaction_roles.views.manage_posts import ManagePostsView
 from cogs.reaction_roles.views.post_editor import (
     PostEditorView,
     ReactionRoleDraftsView,
 )
-from cogs.reaction_roles.views.manage_posts import ManagePostsView
+
+
+def create_post_choice_embed() -> discord.Embed:
+    return discord.Embed(
+        title="📝 Create a Reaction-Role Post",
+        description=(
+            "Would you like to start a new post, or continue "
+            "working on a saved draft?\n\n"
+            "**Create New** — Start with a blank post.\n"
+            "**Use Drafts** — Load a saved draft and continue editing it."
+        ),
+        color=discord.Color.dark_teal(),
+    )
 
 
 class CreatePostChoiceView(View):
@@ -13,6 +26,9 @@ class CreatePostChoiceView(View):
         super().__init__(timeout=300)
         self.bot = bot
         self.guild_id = guild_id
+
+    def create_embed(self) -> discord.Embed:
+        return create_post_choice_embed()
 
     @discord.ui.button(
         label="Create New",
@@ -28,6 +44,7 @@ class CreatePostChoiceView(View):
         editor = PostEditorView(
             bot=self.bot,
             guild_id=self.guild_id,
+            back_view=self,
         )
 
         await interaction.response.edit_message(
@@ -51,6 +68,7 @@ class CreatePostChoiceView(View):
         drafts = ReactionRoleDraftsView(
             bot=self.bot,
             guild_id=self.guild_id,
+            back_view=self,
         )
 
         await interaction.response.edit_message(
@@ -132,16 +150,7 @@ class ReactionRolesDashboardView(View):
 
         await interaction.response.edit_message(
             content=None,
-            embed=discord.Embed(
-                title="📝 Create a Reaction-Role Post",
-                description=(
-                    "Would you like to start a new post, or continue "
-                    "working on a saved draft?\n\n"
-                    "**Create New** — Start with a blank post.\n"
-                    "**Use Drafts** — Load a saved draft and continue editing it."
-                ),
-                color=discord.Color.dark_teal(),
-            ),
+            embed=view.create_embed(),
             view=view,
         )
 
