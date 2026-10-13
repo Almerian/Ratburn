@@ -40,7 +40,7 @@ def _entry_options(bot: discord.Client, guild_id: int, post_id: int | None):
             discord.SelectOption(
                 label="No saved roles yet",
                 value="none",
-                description="Use Add Role to create the first entry.",
+                description="Choose Add Role to create the first entry.",
             )
         ]
 
@@ -50,13 +50,15 @@ def _entry_options(bot: discord.Client, guild_id: int, post_id: int | None):
 
     for entry in entries[:25]:
         role = guild.get_role(entry["role_id"]) if guild else None
-        role_name = role.name if role else f"Unavailable role {entry['role_id']}"
-
+        role_name = (
+            role.name if role else f"Unavailable role {entry['role_id']}"
+        )
         options.append(
             discord.SelectOption(
                 label=role_name[:100],
                 description=(
-                    f"{entry['emoji']} • {entry['description'] or 'No description'}"
+                    f"{entry['emoji']} • "
+                    f"{entry['description'] or 'No description'}"
                 )[:100],
                 value=str(entry["id"]),
             )
@@ -67,7 +69,7 @@ def _entry_options(bot: discord.Client, guild_id: int, post_id: int | None):
             discord.SelectOption(
                 label="No saved roles yet",
                 value="none",
-                description="Use Add Role to create the first entry.",
+                description="Choose Add Role to create the first entry.",
             )
         )
 
@@ -168,9 +170,7 @@ class RoleEntryDetailsModal(Modal):
             return
 
         if color_hex:
-            if color_hex.startswith("#"):
-                color_hex = color_hex[1:]
-
+            color_hex = color_hex.lstrip("#")
             if len(color_hex) != 6:
                 await interaction.response.send_message(
                     "Enter a six-digit hex color, such as `#5865F2`.",
@@ -193,11 +193,10 @@ class RoleEntryDetailsModal(Modal):
         self.entry_editor.description = description
         self.entry_editor.color_hex = color_hex
 
-        await interaction.response.send_message(
-            "Role details updated. Select a role and choose **Save Role Entry**.",
+        await interaction.response.edit_message(
+            content=None,
             embed=self.entry_editor.create_embed(),
             view=self.entry_editor,
-            ephemeral=True,
         )
 
 
@@ -253,7 +252,10 @@ class CreateRoleModal(Modal):
             )
             return
         except discord.HTTPException:
-            logger.exception("Failed to create reaction role in guild %s.", guild.id)
+            logger.exception(
+                "Failed to create reaction role in guild %s.",
+                guild.id,
+            )
             await interaction.response.send_message(
                 "Discord couldn't create that role. Check Ratburn's logs.",
                 ephemeral=True,
@@ -262,11 +264,10 @@ class CreateRoleModal(Modal):
 
         self.entry_editor.role_id = role.id
 
-        await interaction.response.send_message(
-            f"Created {role.mention}. You can now configure and save it.",
+        await interaction.response.edit_message(
+            content=None,
             embed=self.entry_editor.create_embed(),
             view=self.entry_editor,
-            ephemeral=True,
         )
 
 
@@ -275,7 +276,7 @@ class RoleEntrySelect(discord.ui.Select):
         self.editor = editor
 
         super().__init__(
-            placeholder="Select a role entry to edit or remove",
+            placeholder="Select a saved role entry to edit or remove",
             min_values=1,
             max_values=1,
             options=_entry_options(
@@ -288,13 +289,9 @@ class RoleEntrySelect(discord.ui.Select):
 
     async def callback(self, interaction: discord.Interaction):
         if self.values[0] == "none":
-            await interaction.response.send_message(
-                "There are no role entries to select yet.",
-                ephemeral=True,
-            )
-            return
-
-        self.editor.selected_entry_id = int(self.values[0])
+            self.editor.selected_entry_id = None
+        else:
+            self.editor.selected_entry_id = int(self.values[0])
 
         await interaction.response.edit_message(
             content=None,
@@ -304,7 +301,7 @@ class RoleEntrySelect(discord.ui.Select):
 
 
 class RoleEntryEditorView(View):
-    """A focused form opened by Add Role or Edit Role in the main editor."""
+    """Role configuration screen that replaces the parent editor message."""
 
     def __init__(
         self,
@@ -396,6 +393,42 @@ class RoleEntryEditorView(View):
             )
         )
         return embed
+
+    async def interaction_check(
+        self,
+        interaction: discord.Interaction,
+    ) -> bool:
+        if interaction.guild is None or interaction.guild.id != self.guild_id:
+            await interaction.response.send_message(
+                "This editor belongs to a different server.",
+                ephemeral=True,
+            )
+            return False
+
+        if not isinstance(interaction.user, discord.Member) or not (
+            interaction.user.guild_permissions.manage_roles
+        ):
+            await interaction.response.send_message(
+                "You need **Manage Roles** to configure reaction roles.",
+                ephemeral=True,
+            )
+            return False
+
+        return True
+
+    async def return_to_parent(
+        self,
+        interaction: discord.Interaction,
+        notice: str | None = None,
+    ):
+        self.editor.reload_entries()
+
+        await interaction.response.edit_message(
+            content=notice,
+            embed=self.editor.create_embed(),
+            view=self.editor,
+        )
+        self.stop()
 
     @discord.ui.select(
         cls=discord.ui.RoleSelect,
@@ -559,17 +592,23 @@ class RoleEntryEditorView(View):
 
         database = self.bot.database
 
+        # A role entry needs a parent post record. Save the current draft
+        # details first, without sending anything to Discord.
+        if self.editor.channel_id is None:
+            await interaction.response.send_message(
+                "Choose the post's destination channel before adding roles.",
+                ephemeral=True,
+            )
+            return
+
         try:
-            if self.editor.post_id is None:
-                self.editor.post_id = database.save_reaction_role_draft(
-                    post_id=None,
-                    guild_id=self.guild_id,
-                    channel_id=self.editor.channel_id or (
-                        interaction.channel_id
-                    ),
-                    title=self.editor.title,
-                    description=self.editor.description,
-                )
+            self.editor.post_id = database.save_reaction_role_draft(
+                post_id=self.editor.post_id,
+                guild_id=self.guild_id,
+                channel_id=self.editor.channel_id,
+                title=self.editor.title,
+                description=self.editor.description,
+            )
         except (ValueError, TypeError) as error:
             await interaction.response.send_message(
                 f"Couldn't prepare the draft: {error}",
@@ -578,6 +617,7 @@ class RoleEntryEditorView(View):
             return
 
         color_value = _role_color_value(self.color_hex)
+
         if color_value is not None:
             try:
                 await role.edit(
@@ -651,6 +691,20 @@ class RoleEntryEditorView(View):
                 role.id,
             )
 
+            # Prevent duplicate emojis on a single post.
+            all_entries = database.get_reaction_role_entries(
+                self.editor.post_id
+            )
+            for item in all_entries:
+                if item["emoji"] == self.emoji and (
+                    existing is None or item["id"] != existing["id"]
+                ):
+                    await interaction.response.send_message(
+                        "That emoji is already used by another role entry in this post.",
+                        ephemeral=True,
+                    )
+                    return
+
             if existing:
                 entry_id = existing["id"]
                 database.update_reaction_role_entry(
@@ -685,26 +739,13 @@ class RoleEntryEditorView(View):
             )
             return
 
-        self.editor.reload_entries()
-
-        if self.editor.message is not None:
-            try:
-                await self.editor.message.edit(
-                    embed=self.editor.create_embed(),
-                    view=self.editor,
-                )
-            except (discord.HTTPException, discord.NotFound):
-                logger.debug("Could not refresh the parent post editor.")
-
-        await interaction.response.send_message(
-            f"Saved **{role.name}** with reaction {self.emoji}.",
-            ephemeral=True,
+        await self.return_to_parent(
+            interaction,
+            notice=f"✅ Saved **{role.name}** with reaction {self.emoji}.",
         )
 
-        self.stop()
-
     @discord.ui.button(
-        label="Cancel",
+        label="Back to Post",
         style=discord.ButtonStyle.secondary,
         emoji="⬅️",
         row=4,
@@ -714,12 +755,7 @@ class RoleEntryEditorView(View):
         interaction: discord.Interaction,
         button: Button,
     ):
-        await interaction.response.edit_message(
-            content="Role entry editing cancelled.",
-            embed=None,
-            view=None,
-        )
-        self.stop()
+        await self.return_to_parent(interaction)
 
 
 class ReactionRoleDraftSelect(discord.ui.Select):
@@ -785,7 +821,6 @@ class ReactionRoleDraftSelect(discord.ui.Select):
             embed=editor.create_embed(),
             view=editor,
         )
-        editor.message = interaction.message
 
 
 class ReactionRoleDraftsView(View):
@@ -882,7 +917,6 @@ class PostEditorView(View):
         super().__init__(timeout=300)
         self.bot = bot
         self.guild_id = guild_id
-        self.message: discord.Message | None = None
         self.back_view = back_view
 
         self.post_id: int | None = None
@@ -900,17 +934,23 @@ class PostEditorView(View):
             self.title = draft["title"] or self.title
             self.description = draft["description"] or ""
 
+        self.refresh_components()
+
+    def refresh_components(self):
+        self.clear_items()
+        self.add_item(self.select_channel)
         self.add_item(RoleEntrySelect(self))
+        self.add_item(self.add_role)
+        self.add_item(self.edit_role)
+        self.add_item(self.remove_role)
+        self.add_item(self.edit_details)
+        self.add_item(self.save_draft)
+        self.add_item(self.publish_post)
+        self.add_item(self.go_back)
+        self.add_item(self.cancel)
 
     def reload_entries(self):
-        for child in self.children:
-            if isinstance(child, RoleEntrySelect):
-                child.options = _entry_options(
-                    self.bot,
-                    self.guild_id,
-                    self.post_id,
-                )
-                break
+        self.refresh_components()
 
     def create_embed(self) -> discord.Embed:
         embed = discord.Embed(
@@ -919,14 +959,13 @@ class PostEditorView(View):
             color=discord.Color.dark_teal(),
         )
 
-        channel_text = (
-            f"<#{self.channel_id}>"
-            if self.channel_id is not None
-            else "Not selected"
-        )
         embed.add_field(
             name="Destination channel",
-            value=channel_text,
+            value=(
+                f"<#{self.channel_id}>"
+                if self.channel_id is not None
+                else "Not selected"
+            ),
             inline=False,
         )
 
@@ -942,7 +981,11 @@ class PostEditorView(View):
             for entry in entries[:25]:
                 role = guild.get_role(entry["role_id"]) if guild else None
                 role_name = role.name if role else "Unavailable role"
-                selected = " ← selected" if entry["id"] == self.selected_entry_id else ""
+                selected = (
+                    " ← selected"
+                    if entry["id"] == self.selected_entry_id
+                    else ""
+                )
                 lines.append(
                     f"{entry['emoji']} **{role_name}** — "
                     f"{entry['description'] or 'No description'}{selected}"
@@ -959,13 +1002,13 @@ class PostEditorView(View):
             inline=False,
         )
 
-        if self.post_id is not None:
-            embed.set_footer(
-                text=f"Mr. Ratburn • Draft #{self.post_id}"
+        embed.set_footer(
+            text=(
+                f"Mr. Ratburn • Draft #{self.post_id}"
+                if self.post_id is not None
+                else "Mr. Ratburn • New Reaction-Role Post"
             )
-        else:
-            embed.set_footer(text="Mr. Ratburn • New Reaction-Role Post")
-
+        )
         return embed
 
     async def interaction_check(
@@ -994,23 +1037,14 @@ class PostEditorView(View):
         if self.channel_id is None:
             raise ValueError("Choose a destination channel first.")
 
-        if self.post_id is None:
-            self.post_id = self.bot.database.save_reaction_role_draft(
-                post_id=None,
-                guild_id=self.guild_id,
-                channel_id=self.channel_id,
-                title=self.title,
-                description=self.description,
-            )
-        else:
-            self.bot.database.save_reaction_role_draft(
-                post_id=self.post_id,
-                guild_id=self.guild_id,
-                channel_id=self.channel_id,
-                title=self.title,
-                description=self.description,
-            )
-
+        self.post_id = self.bot.database.save_reaction_role_draft(
+            post_id=self.post_id,
+            guild_id=self.guild_id,
+            channel_id=self.channel_id,
+            title=self.title,
+            description=self.description,
+        )
+        self.refresh_components()
         return self.post_id
 
     async def return_to_previous_menu(
@@ -1073,10 +1107,10 @@ class PostEditorView(View):
         button: Button,
     ):
         entry_editor = RoleEntryEditorView(self)
-        await interaction.response.send_message(
+        await interaction.response.edit_message(
+            content=None,
             embed=entry_editor.create_embed(),
             view=entry_editor,
-            ephemeral=True,
         )
 
     @discord.ui.button(
@@ -1100,7 +1134,9 @@ class PostEditorView(View):
         entry = next(
             (
                 item
-                for item in self.bot.database.get_reaction_role_entries(self.post_id)
+                for item in self.bot.database.get_reaction_role_entries(
+                    self.post_id
+                )
                 if item["id"] == self.selected_entry_id
             ),
             None,
@@ -1114,10 +1150,10 @@ class PostEditorView(View):
             return
 
         entry_editor = RoleEntryEditorView(self, entry=entry)
-        await interaction.response.send_message(
+        await interaction.response.edit_message(
+            content=None,
             embed=entry_editor.create_embed(),
             view=entry_editor,
-            ephemeral=True,
         )
 
     @discord.ui.button(
@@ -1188,13 +1224,7 @@ class PostEditorView(View):
             return
 
         try:
-            self.post_id = self.bot.database.save_reaction_role_draft(
-                post_id=self.post_id,
-                guild_id=self.guild_id,
-                channel_id=self.channel_id,
-                title=self.title,
-                description=self.description,
-            )
+            await self.ensure_post_record()
         except (ValueError, TypeError) as error:
             await interaction.response.send_message(
                 f"Couldn't save this draft: {error}",
@@ -1212,7 +1242,6 @@ class PostEditorView(View):
             embed=self.create_embed(),
             view=self,
         )
-        self.reload_entries()
 
     @discord.ui.button(
         label="Publish",
