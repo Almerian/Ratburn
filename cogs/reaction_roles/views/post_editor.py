@@ -31,6 +31,7 @@ class PostDetailsModal(Modal):
         self.editor.description = self.post_description.value.strip()
 
         await interaction.response.edit_message(
+            content=None,
             embed=self.editor.create_embed(),
             view=self.editor,
         )
@@ -49,7 +50,7 @@ class ReactionRoleDraftSelect(discord.ui.Select):
             options.append(
                 discord.SelectOption(
                     label=title[:100] or "Untitled post",
-                    description=description[:100],
+                    description=description[:100] or "No description",
                     value=str(draft["id"]),
                 )
             )
@@ -74,7 +75,6 @@ class ReactionRoleDraftSelect(discord.ui.Select):
 
         post_id = int(self.values[0])
         database = view.bot.database
-
         draft = database.get_reaction_role_post(post_id)
 
         if draft is None or draft["guild_id"] != view.guild_id:
@@ -95,6 +95,7 @@ class ReactionRoleDraftSelect(discord.ui.Select):
             bot=view.bot,
             guild_id=view.guild_id,
             draft=draft,
+            back_view=view,
         )
 
         await interaction.response.edit_message(
@@ -106,10 +107,16 @@ class ReactionRoleDraftSelect(discord.ui.Select):
 
 
 class ReactionRoleDraftsView(View):
-    def __init__(self, bot: discord.Client, guild_id: int):
+    def __init__(
+        self,
+        bot: discord.Client,
+        guild_id: int,
+        back_view: View | None = None,
+    ):
         super().__init__(timeout=300)
         self.bot = bot
         self.guild_id = guild_id
+        self.back_view = back_view
 
         self.drafts = bot.database.get_reaction_role_drafts(guild_id)
 
@@ -147,21 +154,16 @@ class ReactionRoleDraftsView(View):
         interaction: discord.Interaction,
         button: Button,
     ):
-        self.drafts = self.bot.database.get_reaction_role_drafts(
-            self.guild_id
+        refreshed = ReactionRoleDraftsView(
+            bot=self.bot,
+            guild_id=self.guild_id,
+            back_view=self.back_view,
         )
 
-        self.clear_items()
-
-        if self.drafts:
-            self.add_item(ReactionRoleDraftSelect(self.drafts))
-
-        self.add_item(self.refresh)
-        self.add_item(self.back)
-
         await interaction.response.edit_message(
-            embed=self.create_embed(),
-            view=self,
+            content=None,
+            embed=refreshed.create_embed(),
+            view=refreshed,
         )
 
     @discord.ui.button(
@@ -179,23 +181,14 @@ class ReactionRoleDraftsView(View):
             CreatePostChoiceView,
         )
 
-        view = CreatePostChoiceView(
+        view = self.back_view or CreatePostChoiceView(
             bot=self.bot,
             guild_id=self.guild_id,
         )
 
         await interaction.response.edit_message(
             content=None,
-            embed=discord.Embed(
-                title="📝 Create a Reaction-Role Post",
-                description=(
-                    "Would you like to start a new post, or continue "
-                    "working on a saved draft?\n\n"
-                    "**Create New** — Start with a blank post.\n"
-                    "**Use Drafts** — Load a saved draft and continue editing it."
-                ),
-                color=discord.Color.dark_teal(),
-            ),
+            embed=view.create_embed(),
             view=view,
         )
 
@@ -206,11 +199,13 @@ class PostEditorView(View):
         bot: discord.Client,
         guild_id: int,
         draft=None,
+        back_view: View | None = None,
     ):
         super().__init__(timeout=300)
         self.bot = bot
         self.guild_id = guild_id
         self.message: discord.Message | None = None
+        self.back_view = back_view
 
         self.post_id: int | None = None
         self.channel_id: int | None = None
@@ -263,6 +258,27 @@ class PostEditorView(View):
 
         return embed
 
+    async def return_to_previous_menu(
+        self,
+        interaction: discord.Interaction,
+    ):
+        if self.back_view is None:
+            from cogs.reaction_roles.views.dashboard import (
+                CreatePostChoiceView,
+            )
+
+            self.back_view = CreatePostChoiceView(
+                bot=self.bot,
+                guild_id=self.guild_id,
+            )
+
+        await interaction.response.edit_message(
+            content=None,
+            embed=self.back_view.create_embed(),
+            view=self.back_view,
+        )
+        self.stop()
+
     @discord.ui.select(
         cls=discord.ui.ChannelSelect,
         placeholder="Choose the destination channel",
@@ -288,6 +304,7 @@ class PostEditorView(View):
         self.channel_id = channel.id
 
         await interaction.response.edit_message(
+            content=None,
             embed=self.create_embed(),
             view=self,
         )
@@ -377,22 +394,27 @@ class PostEditorView(View):
         )
 
     @discord.ui.button(
-        label="Cancel",
+        label="Back",
         style=discord.ButtonStyle.secondary,
+        emoji="⬅️",
+        row=2,
+    )
+    async def go_back(
+        self,
+        interaction: discord.Interaction,
+        button: Button,
+    ):
+        await self.return_to_previous_menu(interaction)
+
+    @discord.ui.button(
+        label="Cancel",
+        style=discord.ButtonStyle.danger,
         emoji="✖️",
-        row=1,
+        row=2,
     )
     async def cancel(
         self,
         interaction: discord.Interaction,
         button: Button,
     ):
-        for child in self.children:
-            child.disabled = True
-
-        await interaction.response.edit_message(
-            content="Post editor closed. Unsaved changes were discarded.",
-            embed=None,
-            view=self,
-        )
-        self.stop()
+        await self.return_to_previous_menu(interaction)
