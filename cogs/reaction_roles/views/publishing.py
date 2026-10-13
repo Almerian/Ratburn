@@ -10,30 +10,39 @@ async def publish_reaction_role_post(
     guild: discord.Guild,
     post_id: int,
 ) -> tuple[bool, str]:
-
     database = bot.database
     post = database.get_reaction_role_post(post_id)
 
     if post is None or post["guild_id"] != guild.id:
-        return False, "I couldn't find that reaction-role draft in this server."
+        return False, "I couldn't find that reaction-role post in this server."
 
     channel = guild.get_channel(post["channel_id"])
 
     if not isinstance(channel, discord.TextChannel):
         return False, "The destination channel is missing or unavailable."
 
-    permissions = channel.permissions_for(guild.me)
+    me = guild.me
+    if me is None:
+        return False, "I couldn't find Ratburn's server member record."
+
+    permissions = channel.permissions_for(me)
 
     if not permissions.view_channel or not permissions.send_messages:
-        return False, "I need permission to view the destination channel and send messages."
+        return False, (
+            "I need permission to view the destination channel "
+            "and send messages."
+        )
 
     if not permissions.embed_links or not permissions.add_reactions:
-        return False, "I need **Embed Links** and **Add Reactions** permissions in the destination channel."
+        return False, (
+            "I need **Embed Links** and **Add Reactions** permissions "
+            "in the destination channel."
+        )
 
     entries = database.get_reaction_role_entries(post_id)
 
     if not entries:
-        return False, "This draft has no role entries yet. Add at least one role first."
+        return False, "This post has no role entries yet. Add at least one role first."
 
     embed = discord.Embed(
         title=post["title"],
@@ -54,7 +63,7 @@ async def publish_reaction_role_post(
             )
             continue
 
-        if role >= guild.me.top_role:
+        if role >= me.top_role:
             logger.warning(
                 "Skipping role %s because it is not below Ratburn's highest role.",
                 role.id,
@@ -72,7 +81,7 @@ async def publish_reaction_role_post(
 
     if not valid_entries:
         return False, (
-            "None of this draft's roles can currently be managed by Ratburn. "
+            "None of this post's roles can currently be managed by Ratburn. "
             "Check that the roles exist and are below Ratburn's highest role."
         )
 
@@ -82,7 +91,9 @@ async def publish_reaction_role_post(
             "Please split this setup into multiple posts."
         )
 
-    embed.set_footer(text="React to a role below to receive it. Remove your reaction to give it up.")
+    embed.set_footer(
+        text="React to a role below to receive it. Remove your reaction to give it up."
+    )
 
     message = None
     old_message_id = post["message_id"]
@@ -93,33 +104,62 @@ async def publish_reaction_role_post(
         except discord.NotFound:
             message = None
         except discord.Forbidden:
-            return False, "I can't access the existing post. Check my channel permissions."
+            return False, (
+                "I can't access the existing post. Check my channel permissions."
+            )
         except discord.HTTPException:
-            logger.exception("Couldn't fetch reaction-role message %s.", old_message_id)
+            logger.exception(
+                "Couldn't fetch reaction-role message %s.",
+                old_message_id,
+            )
             return False, "Discord couldn't retrieve the existing post."
 
     try:
         if message is None:
             message = await channel.send(embed=embed)
-            database.update_reaction_role_post(
-                post_id,
-                "message_id",
-                message.id,
-            )
         else:
             await message.edit(embed=embed)
 
     except discord.Forbidden:
-        return False, "Discord refused to publish the embed. Check my channel permissions."
+        return False, (
+            "Discord refused to publish the embed. Check my channel permissions."
+        )
     except discord.HTTPException:
         logger.exception("Couldn't publish reaction-role post %s.", post_id)
         return False, "Discord couldn't publish the post. Check Ratburn's logs."
 
-    desired_emojis = [entry["emoji"] for entry in valid_entries]
+    try:
+        database.mark_reaction_role_post_published(
+            post_id=post_id,
+            message_id=message.id,
+        )
+    except Exception:
+        logger.exception(
+            "Message %s was sent, but post %s could not be marked published.",
+            message.id,
+            post_id,
+        )
+        return True, (
+            f"The post was sent in {channel.mention}, but I couldn't update "
+            "its saved status. Check Ratburn's logs."
+        )
+
+    existing_bot_reactions = set()
+    try:
+        for reaction in message.reactions:
+            if reaction.me:
+                existing_bot_reactions.add(str(reaction.emoji))
+    except discord.HTTPException:
+        logger.exception(
+            "Couldn't inspect existing reactions on message %s.",
+            message.id,
+        )
 
     try:
-        for emoji in desired_emojis:
-            await message.add_reaction(emoji)
+        for entry in valid_entries:
+            emoji = entry["emoji"]
+            if emoji not in existing_bot_reactions:
+                await message.add_reaction(emoji)
 
     except (discord.Forbidden, discord.HTTPException):
         logger.exception(
