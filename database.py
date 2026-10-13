@@ -241,18 +241,9 @@ class Database:
             )
         """)
 
-        
-        # ======================================
-        self.connection.execute("""
-            DROP TABLE IF EXISTS reaction_role_entries
-        """)
 
         self.connection.execute("""
-            DROP TABLE IF EXISTS reaction_role_posts
-        """)
-
-        self.connection.execute("""
-            CREATE TABLE reaction_role_posts (
+            CREATE TABLE IF NOT EXISTS reaction_role_posts (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 guild_id INTEGER NOT NULL,
                 channel_id INTEGER NOT NULL,
@@ -268,7 +259,7 @@ class Database:
         """)
 
         self.connection.execute("""
-            CREATE TABLE reaction_role_entries (
+            CREATE TABLE IF NOT EXISTS reaction_role_entries (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 post_id INTEGER NOT NULL,
                 role_id INTEGER NOT NULL,
@@ -286,7 +277,6 @@ class Database:
                 UNIQUE (post_id, emoji)
             )
         """)
-        # ======================================
         
         self.migrate_quiz_tables()
 
