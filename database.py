@@ -1,3 +1,4 @@
+
 import sqlite3
 from pathlib import Path
 
@@ -81,30 +82,22 @@ class Database:
             CREATE TABLE IF NOT EXISTS member_profiles (
                 guild_id INTEGER NOT NULL,
                 user_id INTEGER NOT NULL,
-
                 birthday_month INTEGER,
                 birthday_day INTEGER,
                 birthday_year INTEGER,
-
                 pronouns TEXT,
                 pronoun_index INTEGER NOT NULL DEFAULT 0,
-
                 nickname TEXT,
                 timezone TEXT,
-
                 rules_acknowledged INTEGER NOT NULL DEFAULT 0,
                 rules_acknowledged_at TEXT,
-
                 onboarding_message_id INTEGER,
                 onboarding_step TEXT,
                 onboarding_completed_at TEXT,
-
                 quiz_points INTEGER NOT NULL DEFAULT 0,
                 quiz_questions_answered INTEGER NOT NULL DEFAULT 0,
                 quiz_last_answered TEXT,
-
                 profile_last_edited TEXT,
-
                 PRIMARY KEY (guild_id, user_id)
             )
         """)
@@ -191,24 +184,25 @@ class Database:
             )
         """)
 
-        existing_discipline_columns = {
+        existing_discipline_config_columns = {
             row["name"]
             for row in self.connection.execute(
                 "PRAGMA table_info(discipline_config)"
             ).fetchall()
         }
 
-        new_discipline_columns = {
+        new_discipline_config_columns = {
             "detention_duration_value": "INTEGER",
             "detention_duration_unit": "TEXT",
         }
 
-        for column, column_type in new_discipline_columns.items():
-            if column not in existing_discipline_columns:
+        for column, column_type in new_discipline_config_columns.items():
+            if column not in existing_discipline_config_columns:
                 self.connection.execute(
                     f"ALTER TABLE discipline_config ADD COLUMN "
                     f"{column} {column_type}"
                 )
+
         self.connection.execute("""
             CREATE TABLE IF NOT EXISTS icebreaker_custom_questions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -241,7 +235,8 @@ class Database:
             )
         """)
 
-
+        # Reaction-role tables.
+        # These use IF NOT EXISTS so restarting Ratburn does not erase data.
         self.connection.execute("""
             CREATE TABLE IF NOT EXISTS reaction_role_posts (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -268,19 +263,18 @@ class Database:
                 position INTEGER NOT NULL DEFAULT 0,
                 role_color INTEGER,
                 channel_permissions TEXT,
-
                 FOREIGN KEY (post_id)
                     REFERENCES reaction_role_posts(id)
                     ON DELETE CASCADE,
-
                 UNIQUE (post_id, role_id),
                 UNIQUE (post_id, emoji)
             )
         """)
-        
-        self.migrate_quiz_tables()
 
+        self.migrate_quiz_tables()
         self.connection.commit()
+
+    # ---------------- Quiz migration ----------------
 
     def migrate_quiz_tables(self):
         quiz_scores_exists = self.connection.execute("""
@@ -300,8 +294,7 @@ class Database:
         if quiz_scores_exists:
             self.connection.execute("""
                 INSERT OR IGNORE INTO member_profiles (
-                    guild_id,
-                    user_id
+                    guild_id, user_id
                 )
                 SELECT guild_id, user_id
                 FROM quiz_scores
@@ -326,8 +319,7 @@ class Database:
         if quiz_answers_exists:
             self.connection.execute("""
                 INSERT OR IGNORE INTO member_profiles (
-                    guild_id,
-                    user_id
+                    guild_id, user_id
                 )
                 SELECT guild_id, user_id
                 FROM quiz_answers
@@ -366,26 +358,22 @@ class Database:
             """)
 
         if quiz_answers_exists:
-            self.connection.execute("""
-                DROP TABLE quiz_answers
-            """)
+            self.connection.execute("DROP TABLE quiz_answers")
 
         if quiz_scores_exists:
-            self.connection.execute("""
-                DROP TABLE quiz_scores
-            """)
+            self.connection.execute("DROP TABLE quiz_scores")
+
+    # ---------------- Guild configuration ----------------
 
     def ensure_guild(self, guild_id: int):
         self.connection.execute("""
             INSERT OR IGNORE INTO guild_config (guild_id)
             VALUES (?)
         """, (guild_id,))
-
         self.connection.commit()
 
     def get_config(self, guild_id: int):
         self.ensure_guild(guild_id)
-
         return self.connection.execute("""
             SELECT *
             FROM guild_config
@@ -416,55 +404,42 @@ class Database:
         }
 
         if setting not in allowed_settings:
-            raise ValueError(
-                f"Invalid configuration setting: {setting}"
-            )
+            raise ValueError(f"Invalid configuration setting: {setting}")
 
         self.ensure_guild(guild_id)
-
         self.connection.execute(
-            f"""
-            UPDATE guild_config
-            SET {setting} = ?
-            WHERE guild_id = ?
-            """,
-            (value, guild_id)
+            f"UPDATE guild_config SET {setting} = ? WHERE guild_id = ?",
+            (value, guild_id),
         )
-
         self.connection.commit()
+
+    # ---------------- Filtered words ----------------
 
     def add_filtered_word(self, guild_id: int, word: str):
         self.connection.execute("""
-            INSERT OR IGNORE INTO filtered_words (
-                guild_id,
-                word
-            )
+            INSERT OR IGNORE INTO filtered_words (guild_id, word)
             VALUES (?, ?)
         """, (guild_id, word))
-
         self.connection.commit()
 
     def remove_filtered_word(self, guild_id: int, word: str):
         self.connection.execute("""
             DELETE FROM filtered_words
-            WHERE guild_id = ?
-            AND word = ?
+            WHERE guild_id = ? AND word = ?
         """, (guild_id, word))
-
         self.connection.commit()
-    
+
     def clear_filtered_words(self, guild_id: int):
         self.connection.execute("""
             DELETE FROM filtered_words
             WHERE guild_id = ?
         """, (guild_id,))
-
         self.connection.commit()
-    
+
     def reset_filtered_words_to_default(
         self,
         guild_id: int,
-        default_words: list[str]
+        default_words: list[str],
     ):
         self.connection.execute("""
             DELETE FROM filtered_words
@@ -472,15 +447,9 @@ class Database:
         """, (guild_id,))
 
         self.connection.executemany("""
-            INSERT OR IGNORE INTO filtered_words (
-                guild_id,
-                word
-            )
+            INSERT OR IGNORE INTO filtered_words (guild_id, word)
             VALUES (?, ?)
-        """, [
-            (guild_id, word)
-            for word in default_words
-        ])
+        """, [(guild_id, word) for word in default_words])
 
         self.connection.commit()
 
@@ -492,38 +461,25 @@ class Database:
             ORDER BY word COLLATE NOCASE
         """, (guild_id,)).fetchall()
 
+    # ---------------- Discipline ----------------
+
     def add_discipline_record(
         self,
         guild_id: int,
         user_id: int,
         action: str,
         reason: str,
-        expires_at: str | None = None
+        expires_at: str | None = None,
     ):
         self.connection.execute("""
             INSERT INTO discipline (
-                guild_id,
-                user_id,
-                action,
-                reason,
-                expires_at
+                guild_id, user_id, action, reason, expires_at
             )
             VALUES (?, ?, ?, ?, ?)
-        """, (
-            guild_id,
-            user_id,
-            action,
-            reason,
-            expires_at
-        ))
-
+        """, (guild_id, user_id, action, reason, expires_at))
         self.connection.commit()
 
-    def get_active_discipline_records(
-        self,
-        guild_id: int,
-        user_id: int
-    ):
+    def get_active_discipline_records(self, guild_id: int, user_id: int):
         return self.connection.execute("""
             SELECT *
             FROM discipline
@@ -531,18 +487,9 @@ class Database:
             AND user_id = ?
             AND status = 'active'
             ORDER BY created_at ASC
-        """, (
-            guild_id,
-            user_id
-        )).fetchall()
+        """, (guild_id, user_id)).fetchall()
 
-    
-    def get_retired_discipline_records(
-        self,
-        guild_id: int,
-        user_id: int
-    ):
-        """Return completed, expired, or otherwise retired records."""
+    def get_retired_discipline_records(self, guild_id: int, user_id: int):
         return self.connection.execute("""
             SELECT *
             FROM discipline
@@ -556,27 +503,16 @@ class Database:
                 )
             )
             ORDER BY created_at DESC
-        """, (
-            guild_id,
-            user_id
-        )).fetchall()
+        """, (guild_id, user_id)).fetchall()
 
-    def get_lifetime_demerit_count(
-        self,
-        guild_id: int,
-        user_id: int
-    ) -> int:
-        """Count all currently stored demerit records, regardless of status."""
+    def get_lifetime_demerit_count(self, guild_id: int, user_id: int) -> int:
         return self.connection.execute("""
             SELECT COUNT(*)
             FROM discipline
             WHERE guild_id = ?
             AND user_id = ?
             AND action = 'demerit'
-        """, (
-            guild_id,
-            user_id
-        )).fetchone()[0]
+        """, (guild_id, user_id)).fetchone()[0]
 
     def mark_expired_detentions(self):
         self.connection.execute("""
@@ -587,7 +523,6 @@ class Database:
             AND expires_at IS NOT NULL
             AND datetime(expires_at) <= datetime('now')
         """)
-
         self.connection.commit()
 
     def get_expired_detentions(self):
@@ -605,14 +540,9 @@ class Database:
             SET status = 'complete'
             WHERE id = ?
         """, (record_id,))
-
         self.connection.commit()
 
-    def get_demerit_count(
-        self,
-        guild_id: int,
-        user_id: int
-    ):
+    def get_demerit_count(self, guild_id: int, user_id: int):
         return self.connection.execute("""
             SELECT COUNT(*)
             FROM discipline
@@ -620,28 +550,16 @@ class Database:
             AND user_id = ?
             AND action = 'demerit'
             AND status = 'active'
-        """, (
-            guild_id,
-            user_id
-        )).fetchone()[0]
+        """, (guild_id, user_id)).fetchone()[0]
 
-#==================================DO NOT REMOVE==================================
-    def clear_discipline_records(
-        self,
-        guild_id: int,
-        user_id: int
-    ):
+    #==================================DO NOT REMOVE==================================
+    def clear_discipline_records(self, guild_id: int, user_id: int):
         self.connection.execute("""
             DELETE FROM discipline
-            WHERE guild_id = ?
-            AND user_id = ?
-        """, (
-            guild_id,
-            user_id
-        ))
-
+            WHERE guild_id = ? AND user_id = ?
+        """, (guild_id, user_id))
         self.connection.commit()
-#==================================DO NOT REMOVE==================================
+    #==================================DO NOT REMOVE==================================
 
     def get_discipline_config(self, guild_id: int):
         return self.connection.execute("""
@@ -650,12 +568,7 @@ class Database:
             WHERE guild_id = ?
         """, (guild_id,)).fetchone()
 
-    def set_discipline_config(
-        self,
-        guild_id: int,
-        setting: str,
-        value
-    ):
+    def set_discipline_config(self, guild_id: int, setting: str, value):
         allowed_settings = {
             "mute_demerit_threshold",
             "mute_duration_value",
@@ -675,68 +588,47 @@ class Database:
 
         self.connection.execute(
             f"""
-            INSERT INTO discipline_config (
-                guild_id,
-                {setting}
-            )
+            INSERT INTO discipline_config (guild_id, {setting})
             VALUES (?, ?)
             ON CONFLICT(guild_id)
-            DO UPDATE SET
-                {setting} = excluded.{setting}
+            DO UPDATE SET {setting} = excluded.{setting}
             """,
-            (guild_id, value)
+            (guild_id, value),
         )
-
         self.connection.commit()
+
+    # ---------------- Member profiles ----------------
 
     def ensure_member(self, guild_id: int, user_id: int):
         self.connection.execute("""
-            INSERT OR IGNORE INTO member_profiles (
-                guild_id,
-                user_id
-            )
+            INSERT OR IGNORE INTO member_profiles (guild_id, user_id)
             VALUES (?, ?)
         """, (guild_id, user_id))
-
         self.connection.commit()
 
     def get_member_profile(self, guild_id: int, user_id: int):
         self.ensure_member(guild_id, user_id)
-
         return self.connection.execute("""
             SELECT *
             FROM member_profiles
-            WHERE guild_id = ?
-            AND user_id = ?
-        """, (
-            guild_id,
-            user_id
-        )).fetchone()
+            WHERE guild_id = ? AND user_id = ?
+        """, (guild_id, user_id)).fetchone()
 
-    def get_birthdays(
-        self,
-        guild_id: int,
-        month: int,
-        day: int
-    ):
+    def get_birthdays(self, guild_id: int, month: int, day: int):
         return self.connection.execute("""
             SELECT *
             FROM member_profiles
             WHERE guild_id = ?
             AND birthday_month = ?
             AND birthday_day = ?
-        """, (
-            guild_id,
-            month,
-            day
-        )).fetchall()
+        """, (guild_id, month, day)).fetchall()
 
     def set_member_profile(
         self,
         guild_id: int,
         user_id: int,
         setting: str,
-        value
+        value,
     ):
         allowed_settings = {
             "birthday_month",
@@ -754,105 +646,59 @@ class Database:
         }
 
         if setting not in allowed_settings:
-            raise ValueError(
-                f"Invalid member profile setting: {setting}"
-            )
+            raise ValueError(f"Invalid member profile setting: {setting}")
 
         self.ensure_member(guild_id, user_id)
-
         self.connection.execute(
             f"""
             UPDATE member_profiles
             SET {setting} = ?
-            WHERE guild_id = ?
-            AND user_id = ?
+            WHERE guild_id = ? AND user_id = ?
             """,
-            (value, guild_id, user_id)
+            (value, guild_id, user_id),
         )
-
         self.connection.commit()
 
-    def get_profile_last_edited(
-        self,
-        guild_id: int,
-        user_id: int
-    ):
-        profile = self.get_member_profile(
-            guild_id,
-            user_id
-        )
-
+    def get_profile_last_edited(self, guild_id: int, user_id: int):
+        profile = self.get_member_profile(guild_id, user_id)
         return profile["profile_last_edited"]
 
     def set_profile_last_edited(
         self,
         guild_id: int,
         user_id: int,
-        timestamp: str
+        timestamp: str,
     ):
-        self.ensure_member(
-            guild_id,
-            user_id
-        )
-
+        self.ensure_member(guild_id, user_id)
         self.connection.execute("""
             UPDATE member_profiles
             SET profile_last_edited = ?
-            WHERE guild_id = ?
-            AND user_id = ?
-        """, (
-            timestamp,
-            guild_id,
-            user_id
-        ))
-
+            WHERE guild_id = ? AND user_id = ?
+        """, (timestamp, guild_id, user_id))
         self.connection.commit()
 
-    def get_quiz_score(
-        self,
-        guild_id: int,
-        user_id: int
-    ):
-        profile = self.get_member_profile(
-            guild_id,
-            user_id
-        )
+    # ---------------- Quiz ----------------
 
+    def get_quiz_score(self, guild_id: int, user_id: int):
+        profile = self.get_member_profile(guild_id, user_id)
         return profile["quiz_points"]
 
-    def add_quiz_point(
-        self,
-        guild_id: int,
-        user_id: int
-    ):
-        self.ensure_member(
-            guild_id,
-            user_id
-        )
-
+    def add_quiz_point(self, guild_id: int, user_id: int):
+        self.ensure_member(guild_id, user_id)
         self.connection.execute("""
             UPDATE member_profiles
             SET quiz_points = quiz_points + 1
-            WHERE guild_id = ?
-            AND user_id = ?
-        """, (
-            guild_id,
-            user_id
-        ))
-
+            WHERE guild_id = ? AND user_id = ?
+        """, (guild_id, user_id))
         self.connection.commit()
 
     def has_answered_quiz(
         self,
         guild_id: int,
         user_id: int,
-        quiz_date: str
+        quiz_date: str,
     ):
-        profile = self.get_member_profile(
-            guild_id,
-            user_id
-        )
-
+        profile = self.get_member_profile(guild_id, user_id)
         return profile["quiz_last_answered"] == quiz_date
 
     def record_quiz_answer(
@@ -860,18 +706,12 @@ class Database:
         guild_id: int,
         user_id: int,
         quiz_date: str,
-        correct: bool
+        correct: bool,
     ):
-        self.ensure_member(
-            guild_id,
-            user_id
-        )
-
+        self.ensure_member(guild_id, user_id)
         cursor = self.connection.execute("""
             UPDATE member_profiles
-            SET
-                quiz_questions_answered =
-                    quiz_questions_answered + 1,
+            SET quiz_questions_answered = quiz_questions_answered + 1,
                 quiz_last_answered = ?
             WHERE guild_id = ?
             AND user_id = ?
@@ -879,12 +719,7 @@ class Database:
                 quiz_last_answered IS NULL
                 OR quiz_last_answered != ?
             )
-        """, (
-            quiz_date,
-            guild_id,
-            user_id,
-            quiz_date
-        ))
+        """, (quiz_date, guild_id, user_id, quiz_date))
 
         if cursor.rowcount == 0:
             raise sqlite3.IntegrityError(
@@ -893,31 +728,24 @@ class Database:
 
         self.connection.commit()
 
+    # ---------------- Icebreakers ----------------
 
     def add_icebreaker_question(
         self,
         guild_id: int,
         question: str,
-        added_by: int | None = None
+        added_by: int | None = None,
     ):
         question = question.strip()
-
         if not question:
             raise ValueError("Question cannot be empty.")
 
         self.connection.execute("""
             INSERT OR IGNORE INTO icebreaker_custom_questions (
-                guild_id,
-                question,
-                added_by
+                guild_id, question, added_by
             )
             VALUES (?, ?, ?)
-        """, (
-            guild_id,
-            question,
-            added_by
-        ))
-
+        """, (guild_id, question, added_by))
         self.connection.commit()
 
     def get_icebreaker_questions(self, guild_id: int):
@@ -928,20 +756,11 @@ class Database:
             ORDER BY question COLLATE NOCASE
         """, (guild_id,)).fetchall()
 
-    def remove_icebreaker_question(
-        self,
-        guild_id: int,
-        question_id: int
-    ):
+    def remove_icebreaker_question(self, guild_id: int, question_id: int):
         self.connection.execute("""
             DELETE FROM icebreaker_custom_questions
-            WHERE guild_id = ?
-            AND id = ?
-        """, (
-            guild_id,
-            question_id
-        ))
-
+            WHERE guild_id = ? AND id = ?
+        """, (guild_id, question_id))
         self.connection.commit()
 
     def get_icebreaker_used_questions(self, guild_id: int):
@@ -954,22 +773,13 @@ class Database:
             """, (guild_id,)).fetchall()
         }
 
-    def mark_icebreaker_question_used(
-        self,
-        guild_id: int,
-        question_key: str
-    ):
+    def mark_icebreaker_question_used(self, guild_id: int, question_key: str):
         self.connection.execute("""
             INSERT OR IGNORE INTO icebreaker_question_usage (
-                guild_id,
-                question_key
+                guild_id, question_key
             )
             VALUES (?, ?)
-        """, (
-            guild_id,
-            question_key
-        ))
-
+        """, (guild_id, question_key))
         self.connection.commit()
 
     def reset_icebreaker_question_usage(self, guild_id: int):
@@ -977,7 +787,6 @@ class Database:
             DELETE FROM icebreaker_question_usage
             WHERE guild_id = ?
         """, (guild_id,))
-
         self.connection.commit()
 
     def record_icebreaker_post(
@@ -985,56 +794,33 @@ class Database:
         guild_id: int,
         question_key: str,
         question_text: str,
-        posted_date: str
+        posted_date: str,
     ):
         self.connection.execute("""
             INSERT INTO icebreaker_history (
-                guild_id,
-                question_key,
-                question_text,
-                posted_date
+                guild_id, question_key, question_text, posted_date
             )
             VALUES (?, ?, ?, ?)
-        """, (
-            guild_id,
-            question_key,
-            question_text,
-            posted_date
-        ))
-
+        """, (guild_id, question_key, question_text, posted_date))
         self.connection.commit()
 
-    def get_icebreaker_history(
-        self,
-        guild_id: int,
-        limit: int = 30
-    ):
+    def get_icebreaker_history(self, guild_id: int, limit: int = 30):
         return self.connection.execute("""
             SELECT *
             FROM icebreaker_history
             WHERE guild_id = ?
             ORDER BY posted_date DESC
             LIMIT ?
-        """, (
-            guild_id,
-            limit
-        )).fetchall()
+        """, (guild_id, limit)).fetchall()
 
-    def has_icebreaker_posted(
-        self,
-        guild_id: int,
-        posted_date: str
-    ) -> bool:
+    def has_icebreaker_posted(self, guild_id: int, posted_date: str) -> bool:
         return self.connection.execute("""
             SELECT 1
             FROM icebreaker_history
-            WHERE guild_id = ?
-            AND posted_date = ?
-        """, (
-            guild_id,
-            posted_date
-        )).fetchone() is not None
+            WHERE guild_id = ? AND posted_date = ?
+        """, (guild_id, posted_date)).fetchone() is not None
 
+    # ---------------- Reaction-role posts ----------------
 
     def create_reaction_role_post(
         self,
@@ -1046,10 +832,6 @@ class Database:
     ) -> int:
         if status not in {"draft", "published"}:
             raise ValueError("Invalid reaction-role post status.")
-
-        expires_at = (
-            "14 days" if status == "draft" else None
-        )
 
         cursor = self.connection.execute("""
             INSERT INTO reaction_role_posts (
@@ -1063,7 +845,7 @@ class Database:
             VALUES (
                 ?, ?, ?, ?, ?,
                 CASE
-                    WHEN ? IS NOT NULL
+                    WHEN ? = 'draft'
                     THEN datetime('now', '+14 days')
                     ELSE NULL
                 END
@@ -1074,14 +856,12 @@ class Database:
             title,
             description,
             status,
-            expires_at,
+            status,
         ))
-
         self.connection.commit()
         return cursor.lastrowid
 
     def get_reaction_role_posts(self, guild_id: int):
-        """Return all posts for a server, newest first."""
         return self.connection.execute("""
             SELECT *
             FROM reaction_role_posts
@@ -1105,15 +885,22 @@ class Database:
         """, (message_id,)).fetchone()
 
     def get_reaction_role_drafts(self, guild_id: int):
-        """Return unexpired drafts for a server."""
         self.delete_expired_reaction_role_drafts()
-
         return self.connection.execute("""
             SELECT *
             FROM reaction_role_posts
             WHERE guild_id = ?
             AND status = 'draft'
             ORDER BY updated_at DESC, id DESC
+        """, (guild_id,)).fetchall()
+
+    def get_published_reaction_role_posts(self, guild_id: int):
+        return self.connection.execute("""
+            SELECT *
+            FROM reaction_role_posts
+            WHERE guild_id = ?
+            AND status = 'published'
+            ORDER BY id DESC
         """, (guild_id,)).fetchall()
 
     def save_reaction_role_draft(
@@ -1124,7 +911,6 @@ class Database:
         title: str,
         description: str,
     ) -> int:
-        """Create a draft or update an existing draft, refreshing expiry."""
         if post_id is None:
             cursor = self.connection.execute("""
                 INSERT INTO reaction_role_posts (
@@ -1139,24 +925,16 @@ class Database:
                     ?, ?, ?, ?, 'draft',
                     datetime('now', '+14 days')
                 )
-            """, (
-                guild_id,
-                channel_id,
-                title,
-                description,
-            ))
-
+            """, (guild_id, channel_id, title, description))
             saved_id = cursor.lastrowid
-
         else:
             cursor = self.connection.execute("""
                 UPDATE reaction_role_posts
                 SET channel_id = ?,
                     title = ?,
                     description = ?,
-                    status = 'draft',
-                    draft_expires_at = datetime('now', '+14 days'),
-                    updated_at = CURRENT_TIMESTAMP
+                    updated_at = CURRENT_TIMESTAMP,
+                    draft_expires_at = datetime('now', '+14 days')
                 WHERE id = ?
                 AND guild_id = ?
                 AND status = 'draft'
@@ -1170,7 +948,7 @@ class Database:
 
             if cursor.rowcount == 0:
                 raise ValueError(
-                    "Draft not found, expired, or no longer editable."
+                    "This draft no longer exists or cannot be edited."
                 )
 
             saved_id = post_id
@@ -1178,35 +956,19 @@ class Database:
         self.connection.commit()
         return saved_id
 
-    def publish_reaction_role_post_record(
+    def mark_reaction_role_post_published(
         self,
         post_id: int,
-        guild_id: int,
-        channel_id: int,
         message_id: int,
-        title: str,
-        description: str,
     ):
-        """Mark a post as published after Discord confirms publication."""
         cursor = self.connection.execute("""
             UPDATE reaction_role_posts
-            SET channel_id = ?,
-                message_id = ?,
-                title = ?,
-                description = ?,
+            SET message_id = ?,
                 status = 'published',
                 draft_expires_at = NULL,
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
-            AND guild_id = ?
-        """, (
-            channel_id,
-            message_id,
-            title,
-            description,
-            post_id,
-            guild_id,
-        ))
+        """, (message_id, post_id))
 
         if cursor.rowcount == 0:
             raise ValueError("Reaction-role post not found.")
@@ -1225,6 +987,8 @@ class Database:
             "message_id",
             "title",
             "description",
+            "status",
+            "draft_expires_at",
         }
 
         if setting not in allowed_settings:
@@ -1244,7 +1008,6 @@ class Database:
         self.connection.commit()
 
     def delete_expired_reaction_role_drafts(self):
-        """Delete drafts whose 14-day timer has elapsed."""
         self.connection.execute("""
             DELETE FROM reaction_role_posts
             WHERE status = 'draft'
@@ -1260,6 +1023,7 @@ class Database:
         """, (post_id,))
         self.connection.commit()
 
+    # ---------------- Reaction-role entries ----------------
 
     def add_reaction_role_entry(
         self,
@@ -1291,7 +1055,6 @@ class Database:
             role_color,
             channel_permissions,
         ))
-
         self.connection.commit()
         return cursor.lastrowid
 
@@ -1311,8 +1074,7 @@ class Database:
         return self.connection.execute("""
             SELECT *
             FROM reaction_role_entries
-            WHERE post_id = ?
-            AND emoji = ?
+            WHERE post_id = ? AND emoji = ?
         """, (post_id, emoji)).fetchone()
 
     def get_reaction_role_entry_by_role(
@@ -1323,8 +1085,7 @@ class Database:
         return self.connection.execute("""
             SELECT *
             FROM reaction_role_entries
-            WHERE post_id = ?
-            AND role_id = ?
+            WHERE post_id = ? AND role_id = ?
         """, (post_id, role_id)).fetchone()
 
     def update_reaction_role_entry(
@@ -1363,110 +1124,6 @@ class Database:
             WHERE id = ?
         """, (entry_id,))
         self.connection.commit()
-
-    def add_reaction_role_entry(
-        self,
-        post_id: int,
-        role_id: int,
-        emoji: str,
-        description: str = "",
-        position: int = 0,
-        role_color: int | None = None,
-        channel_permissions: str | None = None,
-    ) -> int:
-        cursor = self.connection.execute("""
-            INSERT INTO reaction_role_entries (
-                post_id,
-                role_id,
-                emoji,
-                description,
-                position,
-                role_color,
-                channel_permissions
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (
-            post_id,
-            role_id,
-            emoji,
-            description,
-            position,
-            role_color,
-            channel_permissions,
-        ))
-
-        self.connection.commit()
-        return cursor.lastrowid
-
-    def get_reaction_role_entries(self, post_id: int):
-        return self.connection.execute("""
-            SELECT *
-            FROM reaction_role_entries
-            WHERE post_id = ?
-            ORDER BY position ASC, id ASC
-        """, (post_id,)).fetchall()
-
-    def get_reaction_role_entry_by_emoji(
-        self,
-        post_id: int,
-        emoji: str,
-    ):
-        return self.connection.execute("""
-            SELECT *
-            FROM reaction_role_entries
-            WHERE post_id = ?
-            AND emoji = ?
-        """, (post_id, emoji)).fetchone()
-
-    def get_reaction_role_entry_by_role(
-        self,
-        post_id: int,
-        role_id: int,
-    ):
-        return self.connection.execute("""
-            SELECT *
-            FROM reaction_role_entries
-            WHERE post_id = ?
-            AND role_id = ?
-        """, (post_id, role_id)).fetchone()
-
-    def update_reaction_role_entry(
-        self,
-        entry_id: int,
-        setting: str,
-        value,
-    ):
-        allowed_settings = {
-            "role_id",
-            "emoji",
-            "description",
-            "position",
-            "role_color",
-            "channel_permissions",
-        }
-
-        if setting not in allowed_settings:
-            raise ValueError(
-                f"Invalid reaction-role entry setting: {setting}"
-            )
-
-        self.connection.execute(
-            f"""
-            UPDATE reaction_role_entries
-            SET {setting} = ?
-            WHERE id = ?
-            """,
-            (value, entry_id),
-        )
-        self.connection.commit()
-
-    def delete_reaction_role_entry(self, entry_id: int):
-        self.connection.execute("""
-            DELETE FROM reaction_role_entries
-            WHERE id = ?
-        """, (entry_id,))
-        self.connection.commit()
-    
 
     def close(self):
         self.connection.close()
