@@ -1,10 +1,8 @@
 import discord
 from discord.ui import Button, Modal, TextInput, View
 
-from cogs.reaction_roles.views.role_editor import RoleEditorView
 
 class PostDetailsModal(Modal):
-
     def __init__(self, editor: "PostEditorView"):
         super().__init__(title="Edit Reaction-Role Post")
         self.editor = editor
@@ -32,61 +30,239 @@ class PostDetailsModal(Modal):
         self.editor.title = self.post_title.value.strip()
         self.editor.description = self.post_description.value.strip()
 
-        if self.editor.message is not None:
-            await self.editor.message.edit(
-                embed=self.editor.create_embed(),
-                view=self.editor,
-            )
-
-        await interaction.response.send_message(
-            "Post details updated!",
-            ephemeral=True,
+        await interaction.response.edit_message(
+            embed=self.editor.create_embed(),
+            view=self.editor,
         )
 
 
-class PostEditorView(View):
+class ReactionRoleDraftSelect(discord.ui.Select):
+    def __init__(self, drafts):
+        options = []
 
+        for draft in drafts[:25]:
+            title = (draft["title"] or "Untitled post").strip()
+            description = (
+                draft["description"] or "No description"
+            ).strip()
+
+            options.append(
+                discord.SelectOption(
+                    label=title[:100] or "Untitled post",
+                    description=description[:100],
+                    value=str(draft["id"]),
+                )
+            )
+
+        super().__init__(
+            placeholder="Choose a draft to continue editing",
+            min_values=1,
+            max_values=1,
+            options=options,
+            row=0,
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        view: ReactionRoleDraftsView = self.view
+
+        if interaction.guild is None or interaction.guild.id != view.guild_id:
+            await interaction.response.send_message(
+                "This draft belongs to a different server.",
+                ephemeral=True,
+            )
+            return
+
+        post_id = int(self.values[0])
+        database = view.bot.database
+
+        draft = database.get_reaction_role_post(post_id)
+
+        if draft is None or draft["guild_id"] != view.guild_id:
+            await interaction.response.send_message(
+                "That draft is no longer available. Please refresh the list.",
+                ephemeral=True,
+            )
+            return
+
+        if draft["status"] != "draft":
+            await interaction.response.send_message(
+                "That post is no longer a draft. Please refresh the list.",
+                ephemeral=True,
+            )
+            return
+
+        editor = PostEditorView(
+            bot=view.bot,
+            guild_id=view.guild_id,
+            draft=draft,
+        )
+
+        await interaction.response.edit_message(
+            content=None,
+            embed=editor.create_embed(),
+            view=editor,
+        )
+        editor.message = interaction.message
+
+
+class ReactionRoleDraftsView(View):
     def __init__(self, bot: discord.Client, guild_id: int):
         super().__init__(timeout=300)
         self.bot = bot
         self.guild_id = guild_id
-        self.channel_id: int | None = None
+
+        self.drafts = bot.database.get_reaction_role_drafts(guild_id)
+
+        if self.drafts:
+            self.add_item(ReactionRoleDraftSelect(self.drafts))
+
+    def create_embed(self) -> discord.Embed:
+        embed = discord.Embed(
+            title="📂 Saved Reaction-Role Drafts",
+            color=discord.Color.dark_teal(),
+        )
+
+        if not self.drafts:
+            embed.description = (
+                "There are no saved drafts right now.\n\n"
+                "Go back and choose **Create New** to start a post."
+            )
+        else:
+            embed.description = (
+                "Choose a draft below to load it into the editor.\n\n"
+                "Drafts expire 14 days after their most recent save."
+            )
+
+        embed.set_footer(text="Mr. Ratburn • Draft Manager")
+        return embed
+
+    @discord.ui.button(
+        label="Refresh",
+        style=discord.ButtonStyle.primary,
+        emoji="🔄",
+        row=1,
+    )
+    async def refresh(
+        self,
+        interaction: discord.Interaction,
+        button: Button,
+    ):
+        self.drafts = self.bot.database.get_reaction_role_drafts(
+            self.guild_id
+        )
+
+        self.clear_items()
+
+        if self.drafts:
+            self.add_item(ReactionRoleDraftSelect(self.drafts))
+
+        self.add_item(self.refresh)
+        self.add_item(self.back)
+
+        await interaction.response.edit_message(
+            embed=self.create_embed(),
+            view=self,
+        )
+
+    @discord.ui.button(
+        label="Back",
+        style=discord.ButtonStyle.secondary,
+        emoji="⬅️",
+        row=1,
+    )
+    async def back(
+        self,
+        interaction: discord.Interaction,
+        button: Button,
+    ):
+        from cogs.reaction_roles.views.dashboard import (
+            CreatePostChoiceView,
+        )
+
+        view = CreatePostChoiceView(
+            bot=self.bot,
+            guild_id=self.guild_id,
+        )
+
+        await interaction.response.edit_message(
+            content=None,
+            embed=discord.Embed(
+                title="📝 Create a Reaction-Role Post",
+                description=(
+                    "Would you like to start a new post, or continue "
+                    "working on a saved draft?\n\n"
+                    "**Create New** — Start with a blank post.\n"
+                    "**Use Drafts** — Load a saved draft and continue editing it."
+                ),
+                color=discord.Color.dark_teal(),
+            ),
+            view=view,
+        )
+
+
+class PostEditorView(View):
+    def __init__(
+        self,
+        bot: discord.Client,
+        guild_id: int,
+        draft=None,
+    ):
+        super().__init__(timeout=300)
+        self.bot = bot
+        self.guild_id = guild_id
         self.message: discord.Message | None = None
+
+        self.post_id: int | None = None
+        self.channel_id: int | None = None
 
         self.title = "Choose your roles!"
         self.description = (
             "Choose the roles you'd like to receive by reacting below."
         )
 
+        if draft is not None:
+            self.post_id = draft["id"]
+            self.channel_id = draft["channel_id"]
+            self.title = draft["title"] or self.title
+            self.description = draft["description"] or ""
+
     def create_embed(self) -> discord.Embed:
         embed = discord.Embed(
             title=self.title,
-            description=self.description,
+            description=self.description or "*No description provided.*",
             color=discord.Color.dark_teal(),
         )
 
-        if self.channel_id is None:
-            channel_text = "Not selected"
-        else:
-            channel_text = f"<#{self.channel_id}>"
+        channel_text = (
+            f"<#{self.channel_id}>"
+            if self.channel_id is not None
+            else "Not selected"
+        )
 
         embed.add_field(
             name="Destination channel",
             value=channel_text,
             inline=False,
         )
+
         embed.add_field(
-            name="Next step",
+            name="Role entries",
             value=(
-                "Save this draft when you're happy with the settings. "
-                "Role entries and publishing will be configured separately."
+                "Role selection will be added directly to this editor "
+                "in the next step."
             ),
             inline=False,
         )
-        embed.set_footer(text="Mr. Ratburn • Reaction-Role Editor")
+
+        if self.post_id is not None:
+            embed.set_footer(
+                text=f"Mr. Ratburn • Editing Draft #{self.post_id}"
+            )
+        else:
+            embed.set_footer(text="Mr. Ratburn • New Reaction-Role Post")
+
         return embed
 
-    
     @discord.ui.select(
         cls=discord.ui.ChannelSelect,
         placeholder="Choose the destination channel",
@@ -127,12 +303,10 @@ class PostEditorView(View):
         interaction: discord.Interaction,
         button: Button,
     ):
-        await interaction.response.send_modal(
-            PostDetailsModal(self)
-        )
+        await interaction.response.send_modal(PostDetailsModal(self))
 
     @discord.ui.button(
-        label="Save draft",
+        label="Save as Draft",
         style=discord.ButtonStyle.success,
         emoji="💾",
         row=1,
@@ -165,43 +339,41 @@ class PostEditorView(View):
             )
             return
 
-        post_id = self.bot.database.create_reaction_role_post(
-            guild_id=self.guild_id,
-            channel_id=self.channel_id,
-            title=self.title,
-            description=self.description,
-        )
+        database = self.bot.database
 
-        for child in self.children:
-            child.disabled = True
+        try:
+            if self.post_id is None:
+                self.post_id = database.create_reaction_role_post(
+                    guild_id=self.guild_id,
+                    channel_id=self.channel_id,
+                    title=self.title,
+                    description=self.description,
+                    status="draft",
+                )
+            else:
+                database.save_reaction_role_draft(
+                    post_id=self.post_id,
+                    guild_id=self.guild_id,
+                    channel_id=self.channel_id,
+                    title=self.title,
+                    description=self.description,
+                )
+        except (ValueError, TypeError) as error:
+            await interaction.response.send_message(
+                f"Couldn't save this draft: {error}",
+                ephemeral=True,
+            )
+            return
 
         await interaction.response.edit_message(
             content=(
-                f"Draft saved successfully! **Post ID:** `{post_id}`\n"
+                f"💾 Draft **{self.title}** saved successfully!\n"
+                f"**Post ID:** `{self.post_id}`\n"
                 f"**Channel:** {channel.mention}\n\n"
-                "You can now configure its role entries."
+                "You can return to this draft later using **Use Drafts**."
             ),
             embed=self.create_embed(),
             view=self,
-        )
-
-        self.stop()
-
-        await interaction.followup.send(
-            embed=discord.Embed(
-                title="Configure a role",
-                description=(
-                    "Choose or create a role, configure its reaction "
-                    "and description, then save the entry."
-                ),
-                color=discord.Color.dark_teal(),
-            ),
-            view=RoleEditorView(
-                bot=self.bot,
-                guild_id=self.guild_id,
-                post_id=post_id,
-            ),
-            ephemeral=True,
         )
 
     @discord.ui.button(
@@ -219,7 +391,7 @@ class PostEditorView(View):
             child.disabled = True
 
         await interaction.response.edit_message(
-            content="Reaction-role draft cancelled. Nothing was saved.",
+            content="Post editor closed. Unsaved changes were discarded.",
             embed=None,
             view=self,
         )
