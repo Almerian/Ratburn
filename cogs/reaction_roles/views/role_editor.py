@@ -3,6 +3,9 @@ import json
 import discord
 from discord.ui import Button, Modal, TextInput, View
 
+from cogs.reaction_roles.views.publishing import (
+    publish_reaction_role_post,
+)
 
 class RoleDetailsModal(Modal):
     def __init__(self, editor: "RoleEditorView"):
@@ -303,6 +306,45 @@ class RoleEditorView(View):
     ):
         await interaction.response.send_modal(RoleDetailsModal(self))
 
+
+    @discord.ui.button(
+        label="Publish / Refresh Post",
+        style=discord.ButtonStyle.primary,
+        emoji="📣",
+        row=4,
+    )
+    async def publish_post(
+        self,
+        interaction: discord.Interaction,
+        button: Button,
+    ):
+        if interaction.guild is None or interaction.guild.id != self.guild_id:
+            await interaction.response.send_message(
+                "This post belongs to a different server.",
+                ephemeral=True,
+            )
+            return
+
+        if not interaction.user.guild_permissions.manage_roles:
+            await interaction.response.send_message(
+                "You need **Manage Roles** to publish reaction-role posts.",
+                ephemeral=True,
+            )
+            return
+
+        await interaction.response.defer(ephemeral=True, thinking=True)
+
+        success, message = await publish_reaction_role_post(
+            bot=self.bot,
+            guild=interaction.guild,
+            post_id=self.post_id,
+        )
+
+        await interaction.followup.send(
+            message,
+            ephemeral=True,
+        )
+    
     @discord.ui.button(
         label="Create role",
         style=discord.ButtonStyle.secondary,
