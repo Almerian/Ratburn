@@ -2,6 +2,7 @@ import discord
 from discord.ui import View, Button
 
 from cogs.reaction_roles.views.post_editor import PostEditorView
+from cogs.reaction_roles.views.manage_posts import ManagePostsView
 
 
 class ReactionRolesDashboardView(View):
@@ -64,6 +65,7 @@ class ReactionRolesDashboardView(View):
 
         editor.message = await interaction.original_response()
 
+    
     @discord.ui.button(
         label="Manage existing posts",
         style=discord.ButtonStyle.primary,
@@ -75,21 +77,21 @@ class ReactionRolesDashboardView(View):
         interaction: discord.Interaction,
         button: Button,
     ):
-        posts = self.bot.database.get_reaction_role_posts(
-            interaction.guild.id
-        )
-
-        if not posts:
+        if interaction.guild is None:
             await interaction.response.send_message(
-                "There are no reaction-role posts to manage yet. "
-                "Choose **Create a reaction-role post** first!",
+                "This dashboard can only be used in a server.",
                 ephemeral=True,
             )
             return
 
+        manager = ManagePostsView(
+            bot=self.bot,
+            guild_id=interaction.guild.id,
+        )
+
         await interaction.response.send_message(
-            "The existing-post editor hasn't been connected yet. "
-            f"I found **{len(posts)}** saved post(s), though!",
+            embed=manager.create_embed(),
+            view=manager,
             ephemeral=True,
         )
 
