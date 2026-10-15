@@ -2,54 +2,53 @@ Never actually made one of these before, gawd help us all.
 
 
 1. 🎓 Onboarding
-  Welcome message
-  Optional birthday collection
+ ✅ Welcome message
+ ✅ Optional birthday collection
   Reaction/button role selection
-  Maybe server rules / "I have read these" acknowledgment
-  Potentially a little Ratburn introduction
+ ✅ Maybe server rules / "I have read these" acknowledgment
+ ✅ Potentially a little Ratburn introduction
 
 2. 🚨 Discipline
-  Rule-break tracking
-  Infractions
-  Demerits
-  Detention
-  Temporary restrictions
-  Temporary bans
-  Permanent bans
-  Full history/ledger
-  Mod overrides
-  Expiration handling
-  Audit logging
+ ✅ Rule-break tracking
+ ✅ Infractions
+ ✅ Demerits
+ ✅ Detention
+ ✅ Temporary restrictions
+ ✅ Permanent bans
+ ✅ Full history/ledger
+ ✅ Mod overrides
+ ✅ Expiration handling
+ ✅ Audit logging
 
 3. 🧹 Chat Filter
-  Add multiple words at once
-  Remove individual words
-  View filter
-  Admin-only modification
-  Mod+ viewing
-  Whole-word/word-boundary matching
+ ✅ Add multiple words at once
+ ✅ Remove individual words
+ ✅ View filter
+ ✅ Admin-only modification
+ ✅ Mod+ viewing
+ ✅ Whole-word/word-boundary matching
   Logging changes
   Potentially different actions for different filter entries later
 
 4. 📝 Daily Quiz
-  Daily question
-  Private/ephemeral answers
-  Per-user score
-  Answer tracking
+ ✅ Daily question
+ ✅ Private/ephemeral answers
+ ✅ Per-user score
+ ✅ Answer tracking
   Eventually: rewards/shop/whatever the hell Ratburn decides points are good for
 
 5. 🗓️ Events & Birthdays
-  Events
-  Time zones
-  24-hour reminders
-  Start announcements
-  Birthday database
-  Birthday announcements
+ ✅ Events
+ ✅ Time zones
+ ✅ 24-hour reminders
+ ✅ Start announcements
+ ✅ Birthday database
+ ✅ Birthday announcements
   Monthly birthday calendar
-  DST handling
+ ✅ DST handling
 
 6. 🤖 Ratburn Personality
-  Keyword/question responses
+ ✅ Keyword/question responses
   Magic tricks
   Context-specific responses
   Random GIFs
@@ -62,8 +61,8 @@ Never actually made one of these before, gawd help us all.
   Possibly /help organized by bot
 
 8. 🔐 Security / Anti-Spam
-  Watch designated "OH GOD THE SPAM BOT IS HERE" channel
-  Automatically ban users who post there
+ ✅ Watch designated "OH GOD THE SPAM BOT IS HERE" channel
+ ✅ Automatically ban users who post there
   Audit everything Ratburn does
 
 
@@ -92,10 +91,6 @@ Handling Punishment
     ├── Reason
     ├── Status
     └── Notes
-  
-  /discipline override <punishment> <reason>: Mod+ command that overrides user's punishment (forgive).
-  /discipline pardon: Admin command that reverts punishment when unfairly punished (forget).
-  /discipline active: Mod+ command showing currently active punishments.
 
 Birthdays
     user_id
