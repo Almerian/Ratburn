@@ -16,7 +16,7 @@ class Database:
         self.initialize()
 
     def initialize(self):
-            self.connection.execute("""
+        self.connection.execute("""
             CREATE TABLE IF NOT EXISTS guild_config (
                 guild_id INTEGER PRIMARY KEY,
                 staff_role_id INTEGER,
@@ -413,7 +413,7 @@ class Database:
             WHERE guild_id = ?
         """, (guild_id,)).fetchone()
 
-        def set_config(self, guild_id: int, setting: str, value):
+    def set_config(self, guild_id: int, setting: str, value):
         allowed_settings = {
             "staff_role_id",
             "detention_role_id",
