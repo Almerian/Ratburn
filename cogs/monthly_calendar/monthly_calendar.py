@@ -1,21 +1,20 @@
-
 import calendar
 import json
 import logging
 import re
 from datetime import date, datetime, time, timedelta, timezone
+from functools import lru_cache
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import discord
 import holidays
+from discord import app_commands
 from discord.ext import commands, tasks
 
 logger = logging.getLogger("ratburn.monthly_calendar")
 
 POST_TIME = time(hour=0, minute=1)
 EDIT_WINDOW = timedelta(hours=24)
-WEEKDAYS = ("Su", "Mo", "Tu", "We", "Th", "Fr", "Sa")
-MAX_DETAIL_LINES = 100
 MAX_SELECT_OPTIONS = 25
 
 COMMON_COUNTRIES = {
@@ -52,7 +51,6 @@ COMMON_OBSERVANCES = {
 
 
 def parse_regions(raw_value) -> list[str]:
-    """Read the configured holiday-region JSON safely."""
     if not raw_value:
         return ["US"]
 
@@ -66,18 +64,16 @@ def parse_regions(raw_value) -> list[str]:
 
     normalized = []
     for region in regions:
-        if not isinstance(region, str):
-            continue
-
-        region = region.strip().upper()
-        if region and region not in normalized:
-            normalized.append(region)
+        if isinstance(region, str):
+            region = region.strip().upper()
+            if region and region not in normalized:
+                normalized.append(region)
 
     return normalized or ["US"]
 
 
-def get_holidays(year: int, regions: list[str]) -> dict[date, list[str]]:
-    """Return national holidays and curated common observances."""
+@lru_cache(maxsize=48)
+def get_holidays_cached(year: int, regions: tuple[str, ...]) -> dict[date, tuple[str, ...]]:
     result: dict[date, list[str]] = {}
 
     def add(day: date, name: str):
@@ -89,41 +85,27 @@ def get_holidays(year: int, regions: list[str]) -> dict[date, list[str]]:
         region in {"INTL", "INTERNATIONAL", "ALL"}
         for region in regions
     )
-
     selected = set(COMMON_COUNTRIES) if international else set(regions)
 
     if international:
         try:
-            supported = holidays.list_supported_countries()
-            selected.update(supported.keys())
+            selected.update(holidays.list_supported_countries().keys())
         except Exception:
-            logger.exception(
-                "Could not enumerate supported holiday countries."
-            )
+            logger.exception("Could not enumerate supported holiday countries.")
 
     for country_code in sorted(selected):
         try:
-            country_calendar = holidays.country_holidays(
-                country_code,
-                years=[year],
-            )
+            country_calendar = holidays.country_holidays(country_code, years=[year])
         except (NotImplementedError, ValueError, KeyError):
-            logger.debug(
-                "Holiday calendar unavailable for country %s.",
-                country_code,
-            )
+            logger.debug("Holiday calendar unavailable for country %s.", country_code)
             continue
         except Exception:
-            logger.exception(
-                "Could not load holiday calendar for %s.",
-                country_code,
-            )
+            logger.exception("Could not load holiday calendar for %s.", country_code)
             continue
 
         for holiday_day, name in country_calendar.items():
             if isinstance(holiday_day, datetime):
                 holiday_day = holiday_day.date()
-
             if isinstance(holiday_day, date):
                 add(holiday_day, str(name))
 
@@ -133,7 +115,14 @@ def get_holidays(year: int, regions: list[str]) -> dict[date, list[str]]:
         except ValueError:
             continue
 
-    return result
+    return {day: tuple(names) for day, names in result.items()}
+
+
+def get_holidays(year: int, regions: list[str]) -> dict[date, list[str]]:
+    return {
+        day: list(names)
+        for day, names in get_holidays_cached(year, tuple(sorted(set(regions)))).items()
+    }
 
 
 def get_holidays_for_month(
@@ -141,20 +130,18 @@ def get_holidays_for_month(
     month: int,
     regions: list[str],
 ) -> dict[date, list[str]]:
-    """Return holidays for the month, including observed dates."""
-    holidays_by_day: dict[date, list[str]] = {}
+    result: dict[date, list[str]] = {}
 
     for holiday_year in (year - 1, year, year + 1):
         for day, names in get_holidays(holiday_year, regions).items():
             if day.year != year or day.month != month:
                 continue
-
             for name in names:
-                existing = holidays_by_day.setdefault(day, [])
+                existing = result.setdefault(day, [])
                 if name not in existing:
                     existing.append(name)
 
-    return holidays_by_day
+    return result
 
 
 def build_calendar_grid(
@@ -162,14 +149,11 @@ def build_calendar_grid(
     month: int,
     marked_days: dict[int, set[str]],
 ) -> str:
-    """Create a compact monospaced calendar grid."""
     weeks = calendar.Calendar(firstweekday=6).monthdayscalendar(year, month)
-
     lines = ["Su    Mo    Tu    We    Th    Fr    Sa"]
 
     for week in weeks:
         cells = []
-
         for day_number in week:
             if day_number == 0:
                 cells.append("      ")
@@ -177,10 +161,8 @@ def build_calendar_grid(
 
             markers = marked_days.get(day_number, set())
             suffix = "".join(
-                marker for marker in ("B", "E", "H")
-                if marker in markers
+                marker for marker in ("B", "E", "H") if marker in markers
             )
-
             cells.append(f"{f'{day_number:02d}{suffix}':<6}")
 
         lines.append("".join(cells).rstrip())
@@ -189,7 +171,6 @@ def build_calendar_grid(
 
 
 def split_field_text(text: str, limit: int = 1000) -> list[str]:
-    """Split long text into Discord-safe field values."""
     if not text:
         return []
 
@@ -201,13 +182,11 @@ def split_field_text(text: str, limit: int = 1000) -> list[str]:
             if current:
                 chunks.append(current)
                 current = ""
-
             while len(line) > limit:
                 chunks.append(line[:limit])
                 line = line[limit:]
 
         candidate = f"{current}\n{line}" if current else line
-
         if len(candidate) > limit and current:
             chunks.append(current)
             current = line
@@ -221,13 +200,11 @@ def split_field_text(text: str, limit: int = 1000) -> list[str]:
 
 
 def parse_calendar_title(message: discord.Message):
-    """Return (year, month) from a calendar embed title."""
     if not message.embeds:
         return None
 
     title = message.embeds[0].title or ""
     match = re.search(r"([A-Za-z]+)\s+(\d{4})", title)
-
     if not match:
         return None
 
@@ -237,10 +214,17 @@ def parse_calendar_title(message: discord.Message):
     except (ValueError, IndexError):
         return None
 
-    if month < 1 or month > 12:
+    if not 1 <= month <= 12:
         return None
 
     return year, month
+
+
+def is_test_calendar(message: discord.Message) -> bool:
+    return bool(
+        message.embeds
+        and "TEST CALENDAR" in (message.embeds[0].title or "").upper()
+    )
 
 
 class AddHolidayModal(discord.ui.Modal, title="Add a Holiday"):
@@ -262,6 +246,16 @@ class AddHolidayModal(discord.ui.Modal, title="Add a Holiday"):
         self.calendar_view = view
 
     async def on_submit(self, interaction: discord.Interaction):
+        if not await self.calendar_view.cog.check_edit_window(
+            self.calendar_view.message_id,
+            self.calendar_view.guild_id,
+        ):
+            await interaction.response.send_message(
+                "This calendar's editing window has expired.",
+                ephemeral=True,
+            )
+            return
+
         try:
             selected_date = date.fromisoformat(str(self.holiday_date).strip())
         except ValueError:
@@ -289,15 +283,20 @@ class AddHolidayModal(discord.ui.Modal, title="Add a Holiday"):
             )
             return
 
+        await interaction.response.defer(ephemeral=True)
         await self.calendar_view.cog.save_holiday_edit(
-            message_id=self.calendar_view.message_id,
-            guild_id=self.calendar_view.guild_id,
-            holiday_date=selected_date,
-            holiday_name=name,
-            action="add",
+            self.calendar_view.message_id,
+            self.calendar_view.guild_id,
+            selected_date,
+            name,
+            "add",
         )
-
-        await self.calendar_view.refresh_message(interaction)
+        await self.calendar_view.cog.refresh_calendar_message(
+            self.calendar_view.message_id,
+            self.calendar_view.guild_id,
+            self.calendar_view.year,
+            self.calendar_view.month,
+        )
         await interaction.followup.send(
             f"Added **{name}** on {selected_date:%b %d} to this calendar.",
             ephemeral=True,
@@ -312,17 +311,13 @@ class HolidayChoiceSelect(discord.ui.Select):
 
         start = page * MAX_SELECT_OPTIONS
         page_entries = entries[start:start + MAX_SELECT_OPTIONS]
-
         options = [
             discord.SelectOption(
                 label=f"{entry['date']:%b %d} — {entry['name']}"[:100],
                 value=str(index),
                 description=f"Holiday on {entry['date']:%Y-%m-%d}",
             )
-            for index, entry in enumerate(
-                page_entries,
-                start=start,
-            )
+            for index, entry in enumerate(page_entries, start=start)
         ]
 
         super().__init__(
@@ -334,14 +329,12 @@ class HolidayChoiceSelect(discord.ui.Select):
         )
 
     async def callback(self, interaction: discord.Interaction):
-        self.calendar_view.selected_entry = self.entries[
-            int(self.values[0])
-        ]
+        self.calendar_view.selected_entry = self.entries[int(self.values[0])]
         await interaction.response.edit_message(
             content=(
                 f"Selected **{self.calendar_view.selected_entry['name']}** "
                 f"on {self.calendar_view.selected_entry['date']:%b %d}. "
-                "Choose Move or Remove."
+                f"Choose {self.calendar_view.mode}."
             ),
             view=self.calendar_view,
         )
@@ -356,25 +349,24 @@ class HolidayEditorView(discord.ui.View):
         year: int,
         month: int,
         entries: list[dict],
+        mode: str,
         page: int = 0,
     ):
         super().__init__(timeout=300)
-
         self.cog = cog
         self.message_id = message_id
         self.guild_id = guild_id
         self.year = year
         self.month = month
         self.entries = entries
+        self.mode = mode
         self.page = page
         self.selected_entry = None
 
         if entries:
             self.add_item(HolidayChoiceSelect(self, entries, page))
-
         if page > 0:
             self.add_item(HolidayEditorPreviousButton(self))
-
         if (page + 1) * MAX_SELECT_OPTIONS < len(entries):
             self.add_item(HolidayEditorNextButton(self))
 
@@ -389,10 +381,11 @@ class HolidayEditorView(discord.ui.View):
             self.year,
             self.month,
             self.entries,
+            self.mode,
             page,
         )
         await interaction.response.edit_message(
-            content="Choose a holiday to move or remove.",
+            content=f"Choose a holiday to {self.mode}.",
             view=view,
         )
 
@@ -407,13 +400,20 @@ class HolidayEditorView(discord.ui.View):
         interaction: discord.Interaction,
         button: discord.ui.Button,
     ):
+        if self.mode != "move":
+            return
         if not self.selected_entry:
             await interaction.response.send_message(
                 "Choose a holiday first.",
                 ephemeral=True,
             )
             return
-
+        if not await self.cog.check_edit_window(self.message_id, self.guild_id):
+            await interaction.response.send_message(
+                "This calendar's editing window has expired.",
+                ephemeral=True,
+            )
+            return
         await interaction.response.send_modal(
             MoveHolidayModal(self, self.selected_entry)
         )
@@ -429,33 +429,39 @@ class HolidayEditorView(discord.ui.View):
         interaction: discord.Interaction,
         button: discord.ui.Button,
     ):
+        if self.mode != "remove":
+            return
         if not self.selected_entry:
             await interaction.response.send_message(
                 "Choose a holiday first.",
                 ephemeral=True,
             )
             return
+        if not await self.cog.check_edit_window(self.message_id, self.guild_id):
+            await interaction.response.send_message(
+                "This calendar's editing window has expired.",
+                ephemeral=True,
+            )
+            return
 
         entry = self.selected_entry
-
+        await interaction.response.defer(ephemeral=True)
         await self.cog.save_holiday_edit(
-            message_id=self.message_id,
-            guild_id=self.guild_id,
-            holiday_date=entry["date"],
-            holiday_name=entry["name"],
-            action="remove",
+            self.message_id,
+            self.guild_id,
+            entry["date"],
+            entry["name"],
+            "remove",
         )
-
         await self.cog.refresh_calendar_message(
             self.message_id,
             self.guild_id,
             self.year,
             self.month,
         )
-
-        await interaction.response.edit_message(
-            content=f"Removed **{entry['name']}** from this calendar.",
-            view=None,
+        await interaction.followup.send(
+            f"Removed **{entry['name']}** from this calendar.",
+            ephemeral=True,
         )
 
 
@@ -499,6 +505,16 @@ class MoveHolidayModal(discord.ui.Modal, title="Move a Holiday"):
         self.entry = entry
 
     async def on_submit(self, interaction: discord.Interaction):
+        if not await self.editor.cog.check_edit_window(
+            self.editor.message_id,
+            self.editor.guild_id,
+        ):
+            await interaction.response.send_message(
+                "This calendar's editing window has expired.",
+                ephemeral=True,
+            )
+            return
+
         try:
             destination = date.fromisoformat(str(self.new_date).strip())
         except ValueError:
@@ -518,6 +534,14 @@ class MoveHolidayModal(discord.ui.Modal, title="Move a Holiday"):
         original = self.entry["date"]
         name = self.entry["name"]
 
+        if destination == original:
+            await interaction.response.send_message(
+                "Choose a different date to move this holiday.",
+                ephemeral=True,
+            )
+            return
+
+        await interaction.response.defer(ephemeral=True)
         await self.editor.cog.save_holiday_edit(
             self.editor.message_id,
             self.editor.guild_id,
@@ -525,7 +549,6 @@ class MoveHolidayModal(discord.ui.Modal, title="Move a Holiday"):
             name,
             "remove",
         )
-
         await self.editor.cog.save_holiday_edit(
             self.editor.message_id,
             self.editor.guild_id,
@@ -533,15 +556,13 @@ class MoveHolidayModal(discord.ui.Modal, title="Move a Holiday"):
             name,
             "add",
         )
-
         await self.editor.cog.refresh_calendar_message(
             self.editor.message_id,
             self.editor.guild_id,
             self.editor.year,
             self.editor.month,
         )
-
-        await interaction.response.send_message(
+        await interaction.followup.send(
             f"Moved **{name}** from {original:%b %d} to {destination:%b %d} "
             "on this calendar.",
             ephemeral=True,
@@ -549,8 +570,6 @@ class MoveHolidayModal(discord.ui.Modal, title="Move a Holiday"):
 
 
 class CalendarPostView(discord.ui.View):
-    """Persistent button view attached to a published calendar."""
-
     def __init__(self, cog, message_id: int):
         super().__init__(timeout=None)
         self.cog = cog
@@ -577,7 +596,10 @@ class CalendarPostView(discord.ui.View):
             )
             return
 
-        if datetime.now(timezone.utc) - interaction.message.created_at > EDIT_WINDOW:
+        if not await self.cog.check_edit_window(
+            interaction.message.id,
+            interaction.guild_id,
+        ):
             await interaction.response.send_message(
                 "This calendar's editing window has expired.",
                 ephemeral=True,
@@ -593,9 +615,8 @@ class CalendarPostView(discord.ui.View):
             return
 
         year, month = parsed
-
         entries = await self.cog.get_editable_holidays(
-            self.message_id,
+            interaction.message.id,
             interaction.guild_id,
             year,
             month,
@@ -603,13 +624,12 @@ class CalendarPostView(discord.ui.View):
 
         view = CalendarEditMenu(
             self.cog,
-            self.message_id,
+            interaction.message.id,
             interaction.guild_id,
             year,
             month,
             entries,
         )
-
         await interaction.response.send_message(
             f"Editing **{calendar.month_name[month]} {year}**. "
             "Changes affect this post only.",
@@ -649,6 +669,12 @@ class CalendarEditMenu(discord.ui.View):
         interaction: discord.Interaction,
         button: discord.ui.Button,
     ):
+        if not await self.cog.check_edit_window(self.message_id, self.guild_id):
+            await interaction.response.send_message(
+                "This calendar's editing window has expired.",
+                ephemeral=True,
+            )
+            return
         await interaction.response.send_modal(AddHolidayModal(self))
 
     @discord.ui.button(
@@ -661,13 +687,18 @@ class CalendarEditMenu(discord.ui.View):
         interaction: discord.Interaction,
         button: discord.ui.Button,
     ):
+        if not await self.cog.check_edit_window(self.message_id, self.guild_id):
+            await interaction.response.send_message(
+                "This calendar's editing window has expired.",
+                ephemeral=True,
+            )
+            return
         if not self.entries:
             await interaction.response.send_message(
                 "There are no holidays to move in this calendar.",
                 ephemeral=True,
             )
             return
-
         await interaction.response.send_message(
             "Choose a holiday to move.",
             view=HolidayEditorView(
@@ -677,6 +708,7 @@ class CalendarEditMenu(discord.ui.View):
                 self.year,
                 self.month,
                 self.entries,
+                "move",
             ),
             ephemeral=True,
         )
@@ -691,13 +723,18 @@ class CalendarEditMenu(discord.ui.View):
         interaction: discord.Interaction,
         button: discord.ui.Button,
     ):
+        if not await self.cog.check_edit_window(self.message_id, self.guild_id):
+            await interaction.response.send_message(
+                "This calendar's editing window has expired.",
+                ephemeral=True,
+            )
+            return
         if not self.entries:
             await interaction.response.send_message(
                 "There are no holidays to remove from this calendar.",
                 ephemeral=True,
             )
             return
-
         await interaction.response.send_message(
             "Choose a holiday to remove.",
             view=HolidayEditorView(
@@ -707,6 +744,7 @@ class CalendarEditMenu(discord.ui.View):
                 self.year,
                 self.month,
                 self.entries,
+                "remove",
             ),
             ephemeral=True,
         )
@@ -728,6 +766,11 @@ class CalendarEditMenu(discord.ui.View):
 
 
 class MonthlyCalendar(commands.Cog):
+    calendar = app_commands.Group(
+        name="calendar",
+        description="Monthly calendar tools",
+    )
+
     def __init__(self, bot):
         self.bot = bot
         self.calendar_loop.start()
@@ -752,11 +795,9 @@ class MonthlyCalendar(commands.Cog):
         await self.register_persistent_views()
 
     async def register_persistent_views(self):
-        """Restore the Edit Calendar button after a restart."""
         for guild in self.bot.guilds:
             config = self.bot.database.get_config(guild.id)
             message_id = config["monthly_calendar_message_id"] if config else None
-
             if message_id:
                 self.bot.add_view(
                     CalendarPostView(self, message_id),
@@ -764,7 +805,6 @@ class MonthlyCalendar(commands.Cog):
                 )
 
     async def authorize_editor(self, interaction: discord.Interaction) -> bool:
-        """Only administrators or configured staff may edit calendars."""
         if interaction.guild is None:
             await interaction.response.send_message(
                 "This action can only be used in a server.",
@@ -790,9 +830,147 @@ class MonthlyCalendar(commands.Cog):
         )
         return False
 
+    async def check_edit_window(self, message_id: int, guild_id: int | None) -> bool:
+        if guild_id is None:
+            return False
+
+        guild = self.bot.get_guild(guild_id)
+        if guild is None:
+            return False
+
+        config = self.bot.database.get_config(guild_id)
+        channel_id = (
+            config["monthly_calendar_channel_id"] or config["event_channel_id"]
+        ) if config else None
+        if not channel_id:
+            return False
+
+        channel = guild.get_channel(channel_id)
+        if channel is None:
+            try:
+                channel = await self.bot.fetch_channel(channel_id)
+            except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                return False
+
+        if not isinstance(channel, discord.TextChannel):
+            return False
+
+        try:
+            message = await channel.fetch_message(message_id)
+        except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+            return False
+
+        return datetime.now(timezone.utc) - message.created_at <= EDIT_WINDOW
+
+    @calendar.command(
+        name="test",
+        description="Post a test version of this month's calendar",
+    )
+    async def test_calendar(self, interaction: discord.Interaction):
+        if not await self.authorize_editor(interaction):
+            return
+
+        if interaction.guild is None:
+            await interaction.response.send_message(
+                "This command can only be used in a server.",
+                ephemeral=True,
+            )
+            return
+
+        config = self.bot.database.get_config(interaction.guild.id)
+        if not config:
+            await interaction.response.send_message(
+                "Configure Ratburn before testing the calendar.",
+                ephemeral=True,
+            )
+            return
+
+        timezone_name = config["timezone"]
+        if not timezone_name:
+            await interaction.response.send_message(
+                "Configure the server timezone before testing the calendar.",
+                ephemeral=True,
+            )
+            return
+
+        try:
+            tz = ZoneInfo(timezone_name)
+        except ZoneInfoNotFoundError:
+            await interaction.response.send_message(
+                "The configured timezone is invalid. Please update it first.",
+                ephemeral=True,
+            )
+            return
+
+        channel_id = (
+            config["monthly_calendar_channel_id"] or config["event_channel_id"]
+        )
+        if not channel_id:
+            await interaction.response.send_message(
+                "Configure a Monthly Calendar Channel or Event Channel first.",
+                ephemeral=True,
+            )
+            return
+
+        channel = interaction.guild.get_channel(channel_id)
+        if channel is None:
+            try:
+                channel = await self.bot.fetch_channel(channel_id)
+            except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                channel = None
+
+        if not isinstance(channel, discord.TextChannel):
+            await interaction.response.send_message(
+                "I couldn't access the configured calendar channel.",
+                ephemeral=True,
+            )
+            return
+
+        await interaction.response.defer(ephemeral=True)
+        now = datetime.now(tz)
+        embed = await self.build_monthly_calendar(
+            interaction.guild,
+            tz,
+            now.year,
+            now.month,
+            test_mode=True,
+        )
+
+        try:
+            message = await channel.send(
+                embed=embed,
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
+        except (discord.Forbidden, discord.HTTPException):
+            logger.exception(
+                "Failed to post test calendar for guild %s.",
+                interaction.guild.id,
+            )
+            await interaction.followup.send(
+                "I couldn't post the test calendar. Check my channel permissions.",
+                ephemeral=True,
+            )
+            return
+
+        try:
+            await message.edit(
+                view=CalendarPostView(self, message.id),
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
+        except (discord.Forbidden, discord.HTTPException):
+            logger.exception(
+                "Could not attach the edit button to test calendar %s.",
+                message.id,
+            )
+
+        await interaction.followup.send(
+            f"Test calendar posted in {channel.mention}. "
+            "The normal monthly posting tracker was not changed.",
+            ephemeral=True,
+        )
+
     async def check_guild(self, guild: discord.Guild):
         config = self.bot.database.get_config(guild.id)
-
         if not config or not config["monthly_calendar_enabled"]:
             return
 
@@ -811,7 +989,6 @@ class MonthlyCalendar(commands.Cog):
             return
 
         now = datetime.now(tz)
-
         if now.day != 1 or now.timetz().replace(tzinfo=None) < POST_TIME:
             return
 
@@ -820,10 +997,8 @@ class MonthlyCalendar(commands.Cog):
             return
 
         channel_id = (
-            config["monthly_calendar_channel_id"]
-            or config["event_channel_id"]
+            config["monthly_calendar_channel_id"] or config["event_channel_id"]
         )
-
         if not channel_id:
             logger.warning(
                 "Calendar enabled but no calendar or event channel is configured "
@@ -833,7 +1008,6 @@ class MonthlyCalendar(commands.Cog):
             return
 
         channel = guild.get_channel(channel_id)
-
         if channel is None:
             try:
                 channel = await self.bot.fetch_channel(channel_id)
@@ -858,12 +1032,6 @@ class MonthlyCalendar(commands.Cog):
         try:
             message = await channel.send(
                 embed=embed,
-                view=None,
-                allowed_mentions=discord.AllowedMentions.none(),
-            )
-
-            await message.edit(
-                view=CalendarPostView(self, message.id),
                 allowed_mentions=discord.AllowedMentions.none(),
             )
         except (discord.Forbidden, discord.HTTPException):
@@ -888,6 +1056,17 @@ class MonthlyCalendar(commands.Cog):
             "monthly_calendar_guild_id",
             guild.id,
         )
+
+        try:
+            await message.edit(
+                view=CalendarPostView(self, message.id),
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
+        except (discord.Forbidden, discord.HTTPException):
+            logger.exception(
+                "Could not attach the edit button to calendar %s.",
+                message.id,
+            )
 
         logger.info(
             "Posted monthly calendar for %s in guild %s.",
@@ -939,18 +1118,13 @@ class MonthlyCalendar(commands.Cog):
 
             name = row["holiday_name"]
             action = row["action"]
-
             if day.year != year or day.month != month:
                 continue
 
             entries = [
                 entry for entry in entries
-                if not (
-                    entry["date"] == day
-                    and entry["name"] == name
-                )
+                if not (entry["date"] == day and entry["name"] == name)
             ]
-
             if action == "add":
                 entries.append({"date": day, "name": name})
 
@@ -975,7 +1149,6 @@ class MonthlyCalendar(commands.Cog):
             raise ValueError("Invalid calendar holiday edit action.")
 
         connection = self.bot.database.connection
-
         connection.execute(
             """
             DELETE FROM monthly_calendar_edits
@@ -991,7 +1164,6 @@ class MonthlyCalendar(commands.Cog):
                 holiday_name,
             ),
         )
-
         connection.execute(
             """
             INSERT INTO monthly_calendar_edits (
@@ -1026,17 +1198,14 @@ class MonthlyCalendar(commands.Cog):
 
         config = self.bot.database.get_config(guild_id)
         tz_name = config["timezone"] if config else None
-
         try:
             tz = ZoneInfo(tz_name or "UTC")
         except ZoneInfoNotFoundError:
             tz = ZoneInfo("UTC")
 
         channel_id = (
-            config["monthly_calendar_channel_id"]
-            or config["event_channel_id"]
+            config["monthly_calendar_channel_id"] or config["event_channel_id"]
         ) if config else None
-
         if not channel_id:
             return
 
@@ -1061,6 +1230,7 @@ class MonthlyCalendar(commands.Cog):
             year,
             month,
             message_id=message_id,
+            test_mode=is_test_calendar(message),
         )
 
         try:
@@ -1079,10 +1249,10 @@ class MonthlyCalendar(commands.Cog):
         year: int,
         month: int,
         message_id: int | None = None,
+        test_mode: bool = False,
     ) -> discord.Embed:
         month_name = calendar.month_name[month]
         days_in_month = calendar.monthrange(year, month)[1]
-
         marked_days: dict[int, set[str]] = {}
         details_by_day: dict[int, list[str]] = {}
 
@@ -1093,16 +1263,13 @@ class MonthlyCalendar(commands.Cog):
             details_by_day.setdefault(day_number, []).append(text)
 
         birthdays = self.bot.database.get_birthdays_for_month(guild.id, month)
-
         for birthday in birthdays:
             day_number = birthday["birthday_day"]
-
             if not 1 <= day_number <= days_in_month:
                 continue
 
             user_id = birthday["user_id"]
             member = guild.get_member(user_id)
-
             if member is not None:
                 display_name = member.display_name
             elif birthday["nickname"]:
@@ -1116,24 +1283,18 @@ class MonthlyCalendar(commands.Cog):
         for event in guild.scheduled_events:
             if event.status.name.lower() in {"cancelled", "completed"}:
                 continue
-
             if event.start_time is None:
                 continue
 
             event_start = event.start_time.astimezone(tz)
-
             if event_start.year != year or event_start.month != month:
                 continue
 
             mark(event_start.day, "E")
             event_time = event_start.strftime("%I:%M %p").lstrip("0")
-            add_detail(
-                event_start.day,
-                f"📌 {event.name} — {event_time}",
-            )
+            add_detail(event_start.day, f"📌 {event.name} — {event_time}")
 
         holidays_by_day = await self.get_base_holidays(guild.id, year, month)
-
         if message_id is not None:
             rows = self.bot.database.connection.execute(
                 """
@@ -1149,38 +1310,34 @@ class MonthlyCalendar(commands.Cog):
                     holiday_day = date.fromisoformat(row["holiday_date"])
                 except (TypeError, ValueError):
                     continue
-
                 if holiday_day.year != year or holiday_day.month != month:
                     continue
 
                 name = row["holiday_name"]
                 action = row["action"]
-
                 if action in {"remove", "move"}:
-                    names = holidays_by_day.get(holiday_day, [])
                     holidays_by_day[holiday_day] = [
-                        existing for existing in names
+                        existing
+                        for existing in holidays_by_day.get(holiday_day, [])
                         if existing != name
                     ]
-
                 if action == "add":
                     names = holidays_by_day.setdefault(holiday_day, [])
                     if name not in names:
                         names.append(name)
 
         for holiday_day, names in holidays_by_day.items():
-            day_number = holiday_day.day
-            if not 1 <= day_number <= days_in_month:
-                continue
-
             for holiday_name in names:
-                mark(day_number, "H")
-                add_detail(day_number, f"🎉 {holiday_name}")
+                mark(holiday_day.day, "H")
+                add_detail(holiday_day.day, f"🎉 {holiday_name}")
 
         grid = build_calendar_grid(year, month, marked_days)
-
         embed = discord.Embed(
-            title=f"🗓️ {month_name} {year}",
+            title=(
+                f"🧪 TEST CALENDAR — {month_name} {year}"
+                if test_mode
+                else f"🗓️ {month_name} {year}"
+            ),
             description=(
                 f"```text\n{grid}\n```\n"
                 "`B` Birthday · `E` Event · `H` Holiday\n"
@@ -1197,7 +1354,6 @@ class MonthlyCalendar(commands.Cog):
             )
         else:
             detail_lines = []
-
             for day_number in sorted(details_by_day):
                 day_date = date(year, month, day_number)
                 heading = day_date.strftime("%a, %b %d").replace(" 0", " ")
@@ -1205,22 +1361,14 @@ class MonthlyCalendar(commands.Cog):
                 detail_lines.extend(details_by_day[day_number])
                 detail_lines.append("")
 
-            chunks = split_field_text(
-                "\n".join(detail_lines).strip()
-            )
-
-
+            chunks = split_field_text("\n".join(detail_lines).strip())
             for index, chunk in enumerate(chunks[:4], start=1):
                 field_name = (
                     "Dates to Note"
                     if index == 1
                     else f"Dates to Note (continued {index})"
                 )
-                embed.add_field(
-                    name=field_name,
-                    value=chunk,
-                    inline=False,
-                )
+                embed.add_field(name=field_name, value=chunk, inline=False)
 
             if len(chunks) > 4:
                 embed.add_field(
@@ -1229,7 +1377,13 @@ class MonthlyCalendar(commands.Cog):
                     inline=False,
                 )
 
-        embed.set_footer(text="Posted by Mr Ratburn • No notifications sent")
+        embed.set_footer(
+            text=(
+                "TEST CALENDAR • Posted by Mr Ratburn • No notifications sent"
+                if test_mode
+                else "Posted by Mr Ratburn • No notifications sent"
+            )
+        )
         return embed
 
 
