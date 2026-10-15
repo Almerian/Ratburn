@@ -592,15 +592,6 @@ class RoleEntryEditorView(View):
 
         database = self.bot.database
 
-        # A role entry needs a parent post record. Save the current draft
-        # details first, without sending anything to Discord.
-        if self.editor.channel_id is None:
-            await interaction.response.send_message(
-                "Choose the post's destination channel before adding roles.",
-                ephemeral=True,
-            )
-            return
-
         try:
             self.editor.post_id = database.save_reaction_role_draft(
                 post_id=self.editor.post_id,
@@ -930,7 +921,7 @@ class PostEditorView(View):
 
         if draft is not None:
             self.post_id = draft["id"]
-            self.channel_id = draft["channel_id"]
+            self.channel_id = draft["channel_id"] or None
             self.title = draft["title"] or self.title
             self.description = draft["description"] or ""
 
@@ -1033,10 +1024,8 @@ class PostEditorView(View):
 
         return True
 
+    
     async def ensure_post_record(self) -> int:
-        if self.channel_id is None:
-            raise ValueError("Choose a destination channel first.")
-
         self.post_id = self.bot.database.save_reaction_role_draft(
             post_id=self.post_id,
             guild_id=self.guild_id,
@@ -1046,6 +1035,7 @@ class PostEditorView(View):
         )
         self.refresh_components()
         return self.post_id
+        
 
     async def return_to_previous_menu(
         self,
@@ -1197,6 +1187,7 @@ class PostEditorView(View):
     ):
         await interaction.response.send_modal(PostDetailsModal(self))
 
+    
     @discord.ui.button(
         label="Save as Draft",
         style=discord.ButtonStyle.success,
@@ -1208,17 +1199,18 @@ class PostEditorView(View):
         interaction: discord.Interaction,
         button: Button,
     ):
-        if self.channel_id is None:
-            await interaction.response.send_message(
-                "Choose a destination channel before saving the draft.",
-                ephemeral=True,
-            )
-            return
+        channel = (
+            interaction.guild.get_channel(self.channel_id)
+            if interaction.guild and self.channel_id is not None
+            else None
+        )
 
-        channel = interaction.guild.get_channel(self.channel_id)
-        if not isinstance(channel, discord.TextChannel):
+        if self.channel_id is not None and not isinstance(
+            channel, discord.TextChannel
+        ):
             await interaction.response.send_message(
-                "That channel is no longer available. Please select another.",
+                "That channel is no longer available. "
+                "Choose another channel or clear the destination.",
                 ephemeral=True,
             )
             return
@@ -1232,16 +1224,21 @@ class PostEditorView(View):
             )
             return
 
+        channel_text = (
+            channel.mention if channel else "Not selected yet"
+        )
+
         await interaction.response.edit_message(
             content=(
                 f"💾 Draft **{self.title}** saved successfully!\n"
                 f"**Post ID:** `{self.post_id}`\n"
-                f"**Channel:** {channel.mention}\n\n"
+                f"**Channel:** {channel_text}\n\n"
                 "You can return to this draft later using **Use Drafts**."
             ),
             embed=self.create_embed(),
             view=self,
         )
+
 
     @discord.ui.button(
         label="Publish",
