@@ -292,6 +292,32 @@ class EntertainmentConfigView(discord.ui.View):
             value=events_value,
             inline=False
         )
+
+        calendar_enabled = bool(config["monthly_calendar_enabled"])
+        calendar_value = (
+            "🟢 Enabled"
+            if calendar_enabled
+            else "🔴 Disabled"
+        )
+
+        calendar_channel_id = (
+            config["monthly_calendar_channel_id"]
+            or config["event_channel_id"]
+        )
+
+        calendar_channel = (
+            channel(calendar_channel_id)
+            if calendar_channel_id
+            else "Uses Event Channel when configured"
+        )
+
+        calendar_value += f"\nChannel: {calendar_channel}"
+
+        embed.add_field(
+            name="🗓️ Monthly Calendar",
+            value=calendar_value,
+            inline=False
+        )
     
         embed.add_field(
             name="🐀 Ratburn Responses",
@@ -373,6 +399,16 @@ class EntertainmentSettingSelect(discord.ui.Select):
                 emoji="📅"
             ),
             discord.SelectOption(
+                label="Monthly Calendar On/Off",
+                value="monthly_calendar_enabled",
+                emoji="🗓️"
+            ),
+            discord.SelectOption(
+                label="Monthly Calendar Channel",
+                value="monthly_calendar_channel_id",
+                emoji="📍"
+            ),
+            discord.SelectOption(
                 label="Ratburn Responses On/Off",
                 value="ratburn_responses_enabled",
                 emoji="🐀"
@@ -411,6 +447,13 @@ class EntertainmentSettingSelect(discord.ui.Select):
                 "📅",
                 "Event reminders and start announcements "
                 "will run for this server."
+            ),
+            "monthly_calendar_enabled": (
+                "Monthly Calendar",
+                "🗓️",
+                "Ratburn will post a calendar on the first day of "
+                "each month, including birthdays, scheduled events, "
+                "and holidays."
             ),
             "ratburn_responses_enabled": (
                 "Ratburn Responses",
@@ -459,6 +502,10 @@ class EntertainmentSettingSelect(discord.ui.Select):
             "event_channel_id": (
                 EventChannelView,
                 "Choose the channel for event reminders."
+            ),
+            "monthly_calendar_channel_id": (
+                MonthlyCalendarChannelView,
+                "Choose where Ratburn should post the monthly calendar."
             ),
         }
 
@@ -2244,4 +2291,122 @@ class QuizPostingTimeModal(
         await interaction.response.send_message(
             f"✅ Daily Quiz posting time saved as **{value}**.",
             ephemeral=True
+        )
+
+class MonthlyCalendarChannelView(discord.ui.View):
+    def __init__(self, bot, guild_id: int):
+        super().__init__(timeout=300)
+        self.bot = bot
+        self.guild_id = guild_id
+        self.selected_channel_id = None
+        self.add_item(MonthlyCalendarChannelSelect())
+
+    def build_embed(self):
+        config = self.bot.database.get_config(self.guild_id)
+        channel_id = (
+            config["monthly_calendar_channel_id"]
+            or config["event_channel_id"]
+        )
+
+        return discord.Embed(
+            title="🗓️ Monthly Calendar Channel",
+            description=(
+                f"Current destination: <#{channel_id}>"
+                if channel_id
+                else "No destination configured yet."
+            )
+            + "\n\nChoose a text channel, or use the Event Channel fallback."
+        )
+
+    @discord.ui.button(
+        label="Save Channel",
+        emoji="💾",
+        style=discord.ButtonStyle.success
+    )
+    async def save(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+        if self.selected_channel_id is None:
+            await interaction.response.send_message(
+                "Please choose a channel first.",
+                ephemeral=True
+            )
+            return
+
+        self.bot.database.set_config(
+            self.guild_id,
+            "monthly_calendar_channel_id",
+            self.selected_channel_id
+        )
+
+        view = EntertainmentConfigView(self.bot, self.guild_id)
+        await interaction.response.edit_message(
+            content=None,
+            embed=view.build_embed(),
+            view=view
+        )
+
+    @discord.ui.button(
+        label="Use Event Channel",
+        emoji="↩️",
+        style=discord.ButtonStyle.secondary
+    )
+    async def use_event_channel(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+        self.bot.database.set_config(
+            self.guild_id,
+            "monthly_calendar_channel_id",
+            None
+        )
+
+        view = EntertainmentConfigView(self.bot, self.guild_id)
+        await interaction.response.edit_message(
+            content=None,
+            embed=view.build_embed(),
+            view=view
+        )
+
+    @discord.ui.button(
+        label="Back",
+        emoji="◀️",
+        style=discord.ButtonStyle.secondary
+    )
+    async def back(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+        view = EntertainmentConfigView(self.bot, self.guild_id)
+        await interaction.response.edit_message(
+            content=None,
+            embed=view.build_embed(),
+            view=view
+        )
+
+
+class MonthlyCalendarChannelSelect(discord.ui.ChannelSelect):
+    def __init__(self):
+        super().__init__(
+            placeholder="Choose the calendar channel...",
+            min_values=1,
+            max_values=1,
+            channel_types=[discord.ChannelType.text]
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        self.view.selected_channel_id = self.values[0].id
+
+        await interaction.response.edit_message(
+            content=(
+                f"**Calendar channel selected:** "
+                f"{self.values[0].mention}\n\n"
+                "Click **Save Channel** to apply this change."
+            ),
+            embed=None,
+            view=self.view
         )
