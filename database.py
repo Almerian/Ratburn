@@ -56,7 +56,7 @@ class Database:
             ).fetchall()
         }
 
-                new_columns = {
+        new_columns = {
             "staff_role_id": "INTEGER",
             "detention_role_id": "INTEGER",
             "detention_channel_id": "INTEGER",
