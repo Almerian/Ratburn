@@ -903,14 +903,17 @@ class Database:
             ORDER BY id DESC
         """, (guild_id,)).fetchall()
 
+    
     def save_reaction_role_draft(
         self,
         post_id: int | None,
         guild_id: int,
-        channel_id: int,
+        channel_id: int | None,
         title: str,
         description: str,
     ) -> int:
+        stored_channel_id = channel_id or 0
+
         if post_id is None:
             cursor = self.connection.execute("""
                 INSERT INTO reaction_role_posts (
@@ -925,7 +928,12 @@ class Database:
                     ?, ?, ?, ?, 'draft',
                     datetime('now', '+14 days')
                 )
-            """, (guild_id, channel_id, title, description))
+            """, (
+                guild_id,
+                stored_channel_id,
+                title,
+                description,
+            ))
             saved_id = cursor.lastrowid
         else:
             cursor = self.connection.execute("""
@@ -939,7 +947,7 @@ class Database:
                 AND guild_id = ?
                 AND status = 'draft'
             """, (
-                channel_id,
+                stored_channel_id,
                 title,
                 description,
                 post_id,
