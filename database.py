@@ -16,7 +16,7 @@ class Database:
         self.initialize()
 
     def initialize(self):
-                self.connection.execute("""
+            self.connection.execute("""
             CREATE TABLE IF NOT EXISTS guild_config (
                 guild_id INTEGER PRIMARY KEY,
                 staff_role_id INTEGER,
