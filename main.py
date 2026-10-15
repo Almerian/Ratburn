@@ -49,6 +49,7 @@ class Ratburn(commands.Bot):
         await self.load_extension("cogs.profile")
         await self.load_extension("cogs.birthdays")
         await self.load_extension("cogs.events")
+        await self.load_extension("cogs.monthly_calendar")
         await self.load_extension("cogs.daily_quiz")
         await self.load_extension("cogs.icebreaker.icebreaker")
         await self.load_extension("cogs.icebreaker.views.question_admin")
