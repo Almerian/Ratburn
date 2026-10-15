@@ -163,7 +163,7 @@ def build_calendar_grid(
             suffix = "".join(
                 marker for marker in ("B", "E", "H") if marker in markers
             )
-            cells.append(f"{f'{day_number:02d}{suffix}':<6}")
+            cells.append(f"{f'{day_number:02d} {suffix}':<6}")
 
         lines.append("".join(cells).rstrip())
 
