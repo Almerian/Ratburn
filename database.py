@@ -1,4 +1,3 @@
-
 import sqlite3
 from pathlib import Path
 
@@ -631,6 +630,19 @@ class Database:
             AND birthday_month = ?
             AND birthday_day = ?
         """, (guild_id, month, day)).fetchall()
+
+    def get_birthdays_for_month(self, guild_id: int, month: int):
+        return self.connection.execute(
+            """
+            SELECT user_id, birthday_month, birthday_day, nickname
+            FROM member_profiles
+            WHERE guild_id = ?
+              AND birthday_month = ?
+              AND birthday_day BETWEEN 1 AND 31
+            ORDER BY birthday_day, user_id
+            """,
+            (guild_id, month),
+        ).fetchall()
 
     def set_member_profile(
         self,
