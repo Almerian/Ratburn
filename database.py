@@ -16,7 +16,7 @@ class Database:
         self.initialize()
 
     def initialize(self):
-        self.connection.execute("""
+                self.connection.execute("""
             CREATE TABLE IF NOT EXISTS guild_config (
                 guild_id INTEGER PRIMARY KEY,
                 staff_role_id INTEGER,
@@ -28,9 +28,14 @@ class Database:
                 birthdays_enabled INTEGER NOT NULL DEFAULT 1,
                 event_channel_id INTEGER,
                 events_enabled INTEGER NOT NULL DEFAULT 1,
+
                 monthly_calendar_enabled INTEGER NOT NULL DEFAULT 0,
                 monthly_calendar_channel_id INTEGER,
-                monthly_calendar_last_posted TEXT
+                monthly_calendar_last_posted TEXT,
+                monthly_calendar_holiday_regions TEXT NOT NULL DEFAULT '["US"]',
+                monthly_calendar_message_id INTEGER,
+                monthly_calendar_guild_id INTEGER,
+
                 audit_log_channel_id INTEGER,
                 timezone TEXT,
                 rules_channel_id INTEGER,
@@ -51,7 +56,7 @@ class Database:
             ).fetchall()
         }
 
-        new_columns = {
+                new_columns = {
             "staff_role_id": "INTEGER",
             "detention_role_id": "INTEGER",
             "detention_channel_id": "INTEGER",
@@ -61,9 +66,16 @@ class Database:
             "birthdays_enabled": "INTEGER NOT NULL DEFAULT 1",
             "event_channel_id": "INTEGER",
             "events_enabled": "INTEGER NOT NULL DEFAULT 1",
+
             "monthly_calendar_enabled": "INTEGER NOT NULL DEFAULT 0",
             "monthly_calendar_channel_id": "INTEGER",
             "monthly_calendar_last_posted": "TEXT",
+            "monthly_calendar_holiday_regions": (
+                "TEXT NOT NULL DEFAULT '[\"US\"]'"
+            ),
+            "monthly_calendar_message_id": "INTEGER",
+            "monthly_calendar_guild_id": "INTEGER",
+
             "audit_log_channel_id": "INTEGER",
             "timezone": "TEXT",
             "rules_channel_id": "INTEGER",
@@ -276,6 +288,22 @@ class Database:
             )
         """)
 
+        self.connection.execute("""
+            CREATE TABLE IF NOT EXISTS monthly_calendar_edits (
+                message_id INTEGER NOT NULL,
+                guild_id INTEGER NOT NULL,
+                holiday_date TEXT NOT NULL,
+                holiday_name TEXT NOT NULL,
+                action TEXT NOT NULL DEFAULT 'add'
+                    CHECK (action IN ('add', 'move', 'remove')),
+                PRIMARY KEY (
+                    message_id,
+                    holiday_date,
+                    holiday_name
+                )
+            )
+        """)
+
         self.migrate_quiz_tables()
         self.connection.commit()
 
@@ -385,7 +413,7 @@ class Database:
             WHERE guild_id = ?
         """, (guild_id,)).fetchone()
 
-    def set_config(self, guild_id: int, setting: str, value):
+        def set_config(self, guild_id: int, setting: str, value):
         allowed_settings = {
             "staff_role_id",
             "detention_role_id",
@@ -396,9 +424,14 @@ class Database:
             "birthdays_enabled",
             "event_channel_id",
             "events_enabled",
+
             "monthly_calendar_enabled",
             "monthly_calendar_channel_id",
             "monthly_calendar_last_posted",
+            "monthly_calendar_holiday_regions",
+            "monthly_calendar_message_id",
+            "monthly_calendar_guild_id",
+
             "audit_log_channel_id",
             "timezone",
             "rules_channel_id",
@@ -412,7 +445,9 @@ class Database:
         }
 
         if setting not in allowed_settings:
-            raise ValueError(f"Invalid configuration setting: {setting}")
+            raise ValueError(
+                f"Invalid configuration setting: {setting}"
+            )
 
         self.ensure_guild(guild_id)
         self.connection.execute(
