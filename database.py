@@ -252,8 +252,6 @@ class Database:
             )
         """)
 
-        # Reaction-role tables.
-        # These use IF NOT EXISTS so restarting Ratburn does not erase data.
         self.connection.execute("""
             CREATE TABLE IF NOT EXISTS reaction_role_posts (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -279,6 +277,7 @@ class Database:
                 description TEXT NOT NULL DEFAULT '',
                 position INTEGER NOT NULL DEFAULT 0,
                 role_color INTEGER,
+                role_icon TEXT,
                 channel_permissions TEXT,
                 FOREIGN KEY (post_id)
                     REFERENCES reaction_role_posts(id)
@@ -287,6 +286,18 @@ class Database:
                 UNIQUE (post_id, emoji)
             )
         """)
+
+        existing_reaction_role_entry_columns = {
+            row["name"]
+            for row in self.connection.execute(
+                "PRAGMA table_info(reaction_role_entries)"
+            ).fetchall()
+        }
+
+        if "role_icon" not in existing_reaction_role_entry_columns:
+            self.connection.execute(
+                "ALTER TABLE reaction_role_entries ADD COLUMN role_icon TEXT"
+            )
 
         self.connection.execute("""
             CREATE TABLE IF NOT EXISTS monthly_calendar_edits (
@@ -1098,6 +1109,7 @@ class Database:
         position: int = 0,
         role_color: int | None = None,
         channel_permissions: str | None = None,
+        role_icon: str | None = None,
     ) -> int:
         cursor = self.connection.execute("""
             INSERT INTO reaction_role_entries (
@@ -1107,9 +1119,10 @@ class Database:
                 description,
                 position,
                 role_color,
-                channel_permissions
+                channel_permissions,
+                role_icon
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             post_id,
             role_id,
@@ -1118,6 +1131,7 @@ class Database:
             position,
             role_color,
             channel_permissions,
+            role_icon,
         ))
         self.connection.commit()
         return cursor.lastrowid
@@ -1165,6 +1179,7 @@ class Database:
             "position",
             "role_color",
             "channel_permissions",
+            "role_icon",
         }
 
         if setting not in allowed_settings:
