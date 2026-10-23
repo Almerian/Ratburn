@@ -1,4 +1,3 @@
-
 import json
 import sqlite3
 
@@ -604,14 +603,26 @@ class ExistingRoleEntryModal(discord.ui.Modal):
             )
             return
 
-        self.editor.emoji = self.emoji_input.value.strip()
+        emoji = self.emoji_input.value.strip()
+
+        if not emoji:
+            await interaction.response.send_message(
+                "A reaction emoji is required.",
+                ephemeral=True,
+            )
+            return
+
+        self.editor.emoji = emoji
         self.editor.description = self.description_input.value.strip()
         self.editor.role_color = color
-        self.editor.role_icon = self.icon_input.value.strip() or None
+        self.editor.role_icon = (
+            self.icon_input.value.strip() or None
+        )
 
-        await interaction.response.edit_message(
-            embed=await self.editor.make_embed(interaction.guild),
-            view=self.editor,
+        await interaction.response.send_message(
+            "Entry details updated in the editor. "
+            "Click **Add role** to save them to the database.",
+            ephemeral=True,
         )
 
 
@@ -952,7 +963,10 @@ async def create_and_save_role(interaction, editor, channel_rules):
 
     bot_member = guild.me
 
-    if bot_member is None or not bot_member.guild_permissions.manage_roles:
+    if (
+        bot_member is None
+        or not bot_member.guild_permissions.manage_roles
+    ):
         await interaction.response.send_message(
             "Ratburn needs the Manage Roles permission to create this role.",
             ephemeral=True,
@@ -980,7 +994,7 @@ async def create_and_save_role(interaction, editor, channel_rules):
         )
         return
 
-    applied_channels = []
+    original_overwrites = {}
 
     try:
         if editor.icon:
@@ -989,11 +1003,17 @@ async def create_and_save_role(interaction, editor, channel_rules):
                     display_icon=editor.icon,
                     reason="Set reaction-role icon",
                 )
-            except (discord.Forbidden, discord.HTTPException, TypeError):
+            except (
+                discord.Forbidden,
+                discord.HTTPException,
+                TypeError,
+                ValueError,
+            ) as exc:
                 raise ValueError(
-                    "Discord couldn't set that role icon. The server "
-                    "may not support role icons, or the icon may be invalid."
-                )
+                    "Discord couldn't set that role icon. Use a "
+                    "supported emoji and check whether the server "
+                    "supports role icons."
+                ) from exc
 
         for rule in channel_rules:
             channel = guild.get_channel(rule["channel_id"])
@@ -1003,6 +1023,10 @@ async def create_and_save_role(interaction, editor, channel_rules):
                     "One of the selected channels no longer exists."
                 )
 
+            original_overwrites[channel.id] = (
+                channel.overwrites_for(role)
+            )
+
             overwrite = build_overwrite(rule["preset"])
 
             await channel.set_permissions(
@@ -1011,13 +1035,7 @@ async def create_and_save_role(interaction, editor, channel_rules):
                 reason="Configured through Ratburn reaction roles",
             )
 
-            applied_channels.append(channel)
-
         database = get_database(editor.bot)
-        existing = database.get_reaction_role_entry_by_role(
-            editor.post_id,
-            role.id,
-        )
 
         permissions_json = (
             encode_channel_permissions(channel_rules)
@@ -1025,29 +1043,36 @@ async def create_and_save_role(interaction, editor, channel_rules):
             else None
         )
 
+        existing = database.get_reaction_role_entry_by_role(
+            editor.post_id,
+            role.id,
+        )
+
         if existing:
+            entry_id = existing["id"]
+
             database.update_reaction_role_entry(
-                existing["id"],
+                entry_id,
                 "emoji",
                 "🎮",
             )
             database.update_reaction_role_entry(
-                existing["id"],
+                entry_id,
                 "description",
                 editor.description,
             )
             database.update_reaction_role_entry(
-                existing["id"],
+                entry_id,
                 "role_color",
                 editor.color,
             )
             database.update_reaction_role_entry(
-                existing["id"],
+                entry_id,
                 "role_icon",
                 editor.icon,
             )
             database.update_reaction_role_entry(
-                existing["id"],
+                entry_id,
                 "channel_permissions",
                 permissions_json,
             )
@@ -1058,14 +1083,28 @@ async def create_and_save_role(interaction, editor, channel_rules):
                 emoji="🎮",
                 description=editor.description,
                 role_color=editor.color,
-                channel_permissions=permissions_json,
                 role_icon=editor.icon,
+                channel_permissions=permissions_json,
             )
 
-    except (ValueError, discord.Forbidden, discord.HTTPException, sqlite3.Error) as exc:
-        for channel in applied_channels:
+    except (
+        ValueError,
+        discord.Forbidden,
+        discord.HTTPException,
+        sqlite3.Error,
+    ) as exc:
+        for channel_id, original_overwrite in original_overwrites.items():
+            channel = guild.get_channel(channel_id)
+
+            if channel is None:
+                continue
+
             try:
-                await channel.set_permissions(role, overwrite=None)
+                await channel.set_permissions(
+                    role,
+                    overwrite=original_overwrite,
+                    reason="Rolling back failed reaction-role setup",
+                )
             except (discord.Forbidden, discord.HTTPException):
                 pass
 
