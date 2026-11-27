@@ -540,6 +540,11 @@ class Database:
             WHERE guild_id = ?
             AND user_id = ?
             AND status = 'active'
+            AND (
+                action != 'demerit'
+                OR expires_at IS NULL
+                OR datetime(expires_at) > datetime('now')
+            )
             ORDER BY created_at ASC
         """, (guild_id, user_id)).fetchall()
 
@@ -579,6 +584,30 @@ class Database:
         """)
         self.connection.commit()
 
+    def mark_expired_demerits(self, guild_id: int | None = None) -> int:
+        if guild_id is None:
+            cursor = self.connection.execute("""
+                UPDATE discipline
+                SET status = 'expired'
+                WHERE action = 'demerit'
+                AND status = 'active'
+                AND expires_at IS NOT NULL
+                AND datetime(expires_at) <= datetime('now')
+            """)
+        else:
+            cursor = self.connection.execute("""
+                UPDATE discipline
+                SET status = 'expired'
+                WHERE guild_id = ?
+                AND action = 'demerit'
+                AND status = 'active'
+                AND expires_at IS NOT NULL
+                AND datetime(expires_at) <= datetime('now')
+            """, (guild_id,))
+
+        self.connection.commit()
+        return cursor.rowcount
+
     def get_expired_detentions(self):
         return self.connection.execute("""
             SELECT *
@@ -604,6 +633,10 @@ class Database:
             AND user_id = ?
             AND action = 'demerit'
             AND status = 'active'
+            AND (
+                expires_at IS NULL
+                OR datetime(expires_at) > datetime('now')
+            )
         """, (guild_id, user_id)).fetchone()[0]
 
     #==================================DO NOT REMOVE==================================
