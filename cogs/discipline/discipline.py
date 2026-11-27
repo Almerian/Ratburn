@@ -3,7 +3,7 @@ from discord.ext import commands
 from discord import app_commands
 from datetime import datetime, timezone, timedelta
 
-from .demerit_expiration import is_demerit_active
+from .demerit_expiration import (is_demerit_active, DemeritExpirationManager,)
 from .thresholds import get_punishment_tier
 from .mute import issue_mute
 from .detention import DetentionManager
@@ -15,6 +15,7 @@ class Discipline(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.detention = DetentionManager(bot)
+        self.demerit_expiration = DemeritExpirationManager(bot)
 
 
     
@@ -149,6 +150,7 @@ class Discipline(commands.Cog):
 
     def cog_unload(self):
         self.detention.stop()
+        self.demerit_expiration.stop()
 
     async def process_violation(
         self,
