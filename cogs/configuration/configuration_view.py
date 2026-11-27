@@ -139,6 +139,7 @@ class ConfigView(discord.ui.View):
             view=view
         )
 
+
     @discord.ui.button(
         label="Reaction Roles",
         emoji="🎭",
@@ -151,7 +152,8 @@ class ConfigView(discord.ui.View):
     ):
         view = ReactionRolesDashboardView(
             self.bot,
-            self.guild_id
+            self.guild_id,
+            back_view=self,
         )
 
         await interaction.response.edit_message(
