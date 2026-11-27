@@ -3,7 +3,7 @@ from discord.ui import Button, View
 
 from cogs.reaction_roles.views.manage_posts import ManagePostsView
 from cogs.reaction_roles.views.post_editor import (
-    PostEditorView,
+    PostCreationModal,
     ReactionRoleDraftsView,
 )
 
@@ -41,18 +41,13 @@ class CreatePostChoiceView(View):
         interaction: discord.Interaction,
         button: Button,
     ):
-        editor = PostEditorView(
-            bot=self.bot,
-            guild_id=self.guild_id,
-            back_view=self,
+        await interaction.response.send_modal(
+            PostCreationModal(
+                bot=self.bot,
+                guild_id=self.guild_id,
+                back_view=self,
+            )
         )
-
-        await interaction.response.edit_message(
-            content=None,
-            embed=editor.create_embed(),
-            view=editor,
-        )
-        editor.message = interaction.message
 
     @discord.ui.button(
         label="Use Drafts",
@@ -202,6 +197,7 @@ class ReactionRolesDashboardView(View):
             embed=None,
             view=self,
         )
+
         self.stop()
 
 
@@ -216,5 +212,6 @@ def create_dashboard_embed() -> discord.Embed:
         ),
         color=discord.Color.dark_teal(),
     )
+
     embed.set_footer(text="Mr. Ratburn • Server Configuration")
     return embed
