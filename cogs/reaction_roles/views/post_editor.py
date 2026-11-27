@@ -200,77 +200,6 @@ class RoleEntryDetailsModal(Modal):
         )
 
 
-class CreateRoleModal(Modal):
-    def __init__(self, entry_editor: "RoleEntryEditorView"):
-        super().__init__(title="Create a Discord Role")
-        self.entry_editor = entry_editor
-
-        self.role_name = TextInput(
-            label="Role name",
-            placeholder="Gaming Updates",
-            max_length=100,
-            required=True,
-        )
-        self.add_item(self.role_name)
-
-    async def on_submit(self, interaction: discord.Interaction):
-        guild = interaction.guild
-
-        if guild is None or guild.id != self.entry_editor.guild_id:
-            await interaction.response.send_message(
-                "This must be used in the correct server.",
-                ephemeral=True,
-            )
-            return
-
-        me = guild.me
-        if me is None or not me.guild_permissions.manage_roles:
-            await interaction.response.send_message(
-                "Ratburn needs the **Manage Roles** permission.",
-                ephemeral=True,
-            )
-            return
-
-        name = self.role_name.value.strip()
-        if not name:
-            await interaction.response.send_message(
-                "Enter a role name.",
-                ephemeral=True,
-            )
-            return
-
-        try:
-            role = await guild.create_role(
-                name=name,
-                reason="Created through Ratburn's reaction-role editor",
-            )
-        except discord.Forbidden:
-            await interaction.response.send_message(
-                "Discord wouldn't let Ratburn create that role. "
-                "Check its permissions and role hierarchy.",
-                ephemeral=True,
-            )
-            return
-        except discord.HTTPException:
-            logger.exception(
-                "Failed to create reaction role in guild %s.",
-                guild.id,
-            )
-            await interaction.response.send_message(
-                "Discord couldn't create that role. Check Ratburn's logs.",
-                ephemeral=True,
-            )
-            return
-
-        self.entry_editor.role_id = role.id
-
-        await interaction.response.edit_message(
-            content=None,
-            embed=self.entry_editor.create_embed(),
-            view=self.entry_editor,
-        )
-
-
 class RoleEntrySelect(discord.ui.Select):
     def __init__(self, editor: "PostEditorView"):
         self.editor = editor
@@ -508,19 +437,6 @@ class RoleEntryEditorView(View):
         await interaction.response.send_modal(RoleEntryDetailsModal(self))
 
     @discord.ui.button(
-        label="Create role",
-        style=discord.ButtonStyle.secondary,
-        emoji="➕",
-        row=3,
-    )
-    async def create_role(
-        self,
-        interaction: discord.Interaction,
-        button: Button,
-    ):
-        await interaction.response.send_modal(CreateRoleModal(self))
-
-    @discord.ui.button(
         label="Save Role Entry",
         style=discord.ButtonStyle.success,
         emoji="💾",
@@ -551,7 +467,7 @@ class RoleEntryEditorView(View):
 
         if self.role_id is None:
             await interaction.response.send_message(
-                "Select or create a role first.",
+                "Select an existing server role first.",
                 ephemeral=True,
             )
             return
