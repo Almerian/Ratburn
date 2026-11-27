@@ -22,10 +22,16 @@ def create_post_choice_embed() -> discord.Embed:
 
 
 class CreatePostChoiceView(View):
-    def __init__(self, bot: discord.Client, guild_id: int):
+    def __init__(
+        self,
+        bot: discord.Client,
+        guild_id: int,
+        back_view: View | None = None,
+    ):
         super().__init__(timeout=300)
         self.bot = bot
         self.guild_id = guild_id
+        self.back_view = back_view
 
     def create_embed(self) -> discord.Embed:
         return create_post_choice_embed()
@@ -83,19 +89,32 @@ class CreatePostChoiceView(View):
         interaction: discord.Interaction,
         button: Button,
     ):
-        dashboard = ReactionRolesDashboardView(self.bot)
+        dashboard = self.back_view or ReactionRolesDashboardView(
+            self.bot,
+            self.guild_id,
+        )
 
         await interaction.response.edit_message(
             content=None,
-            embed=create_dashboard_embed(),
+            embed=dashboard.build_embed(),
             view=dashboard,
         )
 
 
 class ReactionRolesDashboardView(View):
-    def __init__(self, bot: discord.Client):
+    def __init__(
+        self,
+        bot: discord.Client,
+        guild_id: int | None = None,
+        back_view: View | None = None,
+    ):
         super().__init__(timeout=300)
         self.bot = bot
+        self.guild_id = guild_id
+        self.back_view = back_view
+
+    def build_embed(self) -> discord.Embed:
+        return create_dashboard_embed()
 
     async def interaction_check(
         self,
@@ -141,6 +160,7 @@ class ReactionRolesDashboardView(View):
         view = CreatePostChoiceView(
             bot=self.bot,
             guild_id=interaction.guild.id,
+            back_view=self,
         )
 
         await interaction.response.edit_message(
@@ -179,23 +199,28 @@ class ReactionRolesDashboardView(View):
         )
 
     @discord.ui.button(
-        label="Close",
+        label="Back to Configuration",
         style=discord.ButtonStyle.secondary,
-        emoji="✖️",
+        emoji="⬅️",
         row=1,
     )
-    async def close_dashboard(
+    async def back_to_configuration(
         self,
         interaction: discord.Interaction,
         button: Button,
     ):
-        for child in self.children:
-            child.disabled = True
+        if self.back_view is None:
+            from cogs.configuration.configuration_view import ConfigView
+
+            self.back_view = ConfigView(
+                self.bot,
+                interaction.guild.id,
+            )
 
         await interaction.response.edit_message(
-            content="Reaction-role dashboard closed.",
-            embed=None,
-            view=self,
+            content=None,
+            embed=self.back_view.build_embed(),
+            view=self.back_view,
         )
 
         self.stop()
